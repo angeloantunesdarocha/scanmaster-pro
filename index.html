@@ -1,0 +1,1396 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#5D31C8">
+  <title>ScanMaster Pro</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js" defer></script>
+  <style>
+    :root {
+      --bg: #f5f4fb;
+      --surface: #ffffff;
+      --surface-strong: #f1efff;
+      --surface-weak: #ece8ff;
+      --text: #1d1b24;
+      --text-muted: #6d6a79;
+      --primary: #5d31c8;
+      --primary-soft: #e9deff;
+      --secondary: #00b0ff;
+      --danger: #d32f2f;
+      --success: #00a676;
+      --border: rgba(93,49,200,0.12);
+      --shadow: 0 24px 80px rgba(44, 20, 95, 0.12);
+      --nav-active-bg: rgba(93,49,200,0.16);
+      --nav-active-text: var(--primary);
+    }
+    [data-theme="dark"] {
+      --bg: #09060f;
+      --surface: #110b1e;
+      --surface-strong: #1b1432;
+      --surface-weak: rgba(255,255,255,0.04);
+      --text: #f5f3ff;
+      --text-muted: #c8c2e3;
+      --primary: #8e63ff;
+      --primary-soft: rgba(142,99,255,0.16);
+      --secondary: #1ebeff;
+      --danger: #f25779;
+      --success: #34d399;
+      --border: rgba(255,255,255,0.1);
+      --shadow: 0 24px 90px rgba(0, 0, 0, 0.35);
+      --nav-active-bg: rgba(255,255,255,0.16);
+      --nav-active-text: #fff;
+    }
+    * { box-sizing:border-box; }
+    html, body { margin:0; min-height:100%; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top, rgba(93,49,200,0.10), transparent 28%), var(--bg); color: var(--text); }
+    body { padding-bottom: 112px; }
+    button, input, select { font: inherit; }
+    button { border: none; cursor: pointer; }
+    .app { max-width: 1120px; margin: 0 auto; padding: 20px 20px 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-mark { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-weight:700; font-size:22px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+    .brand-title { display: grid; gap: 4px; }
+    .brand-title strong { font-size: 18px; display:block; }
+    .brand-title span { font-size: 13px; color: var(--text-muted); }
+    .icon-btn { width: 46px; height: 46px; border-radius: 16px; background: var(--surface); color: var(--primary); display: grid; place-items: center; box-shadow: var(--shadow); transition: transform 0.2s ease, background 0.2s ease; }
+    .icon-btn:hover { transform: translateY(-2px); background: var(--surface-strong); }
+    :focus-visible { outline: 3px solid rgba(93,49,200,0.8); outline-offset: 3px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, .page-card:focus-visible, .nav-btn:focus-visible { outline: 3px solid rgba(93,49,200,0.8); outline-offset: 3px; }
+    .content { display: grid; gap: 18px; }
+    .page { display: none; animation: fadeIn 0.28s ease both; }
+    .page.active { display: block; }
+    .status-card { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+    .status-block { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 18px; box-shadow: var(--shadow); }
+    .status-block strong { display:block; margin-bottom: 8px; font-size: 14px; color: var(--text-muted); }
+    .status-block span { font-size: 22px; font-weight: 700; color: var(--text); }
+    .hero-card, .scanner-card, .tool-grid, .settings-grid, .page-grid, .scanner-card, .settings-card, .tool-card { background: var(--surface); border: 1px solid var(--border); border-radius: 28px; box-shadow: var(--shadow); }
+    .hero-card { padding: 28px; display: grid; gap: 16px; }
+    .hero-card h2 { font-size: 26px; margin:0; }
+    .hero-card p { margin: 0; color: var(--text-muted); line-height:1.7; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+    .btn { border-radius: 16px; padding: 14px 20px; min-width: 140px; transition: transform 0.2s ease, box-shadow 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+    .btn-primary { background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; box-shadow: 0 18px 40px rgba(93,49,200,0.25); }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-secondary { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+    .btn-secondary:hover { background: rgba(93,49,200,0.08); }
+    .mini-btn { background: var(--surface-strong); color: var(--text); padding: 12px 18px; border-radius: 14px; border: 1px solid var(--border); }
+    .scanner-card { padding: 22px; display: grid; gap: 18px; }
+    .scanner-summary { display: flex; flex-wrap: wrap; gap: 12px; }
+    .page-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 14px; margin-top: 4px; }
+    .page-card { position: relative; border-radius: 24px; overflow: hidden; cursor: grab; border: 1px solid transparent; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+    .page-card:hover { transform: translateY(-3px); border-color: rgba(93,49,200,0.16); box-shadow: 0 16px 38px rgba(93,49,200,0.12); }
+    .page-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; }
+    .page-card .page-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 14px; background: linear-gradient(180deg,transparent,rgba(0,0,0,0.55)); color:#fff; display:flex; align-items:center; justify-content:space-between; gap: 10px; }
+    .page-card .page-info strong { font-size: 13px; }
+    .page-card .page-remove { width: 34px; height: 34px; border-radius: 12px; border:none; background: rgba(0,0,0,0.6); color:#fff; font-size:16px; display:flex; align-items:center; justify-content:center; }
+    .page-card.dragging { opacity: 0.55; }
+    .page-placeholder { min-height: 160px; border: 2px dashed var(--border); display: grid; place-items: center; border-radius: 24px; color: var(--text-muted); }
+    .tool-grid { padding: 20px; display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 16px; }
+    .tool-card { padding: 22px; display: grid; gap: 14px; min-height: 170px; }
+    .tool-card h3 { margin:0; font-size: 16px; }
+    .tool-card p { margin:0; color: var(--text-muted); line-height:1.6; }
+    .tool-card button { width: 100%; }
+    .settings-grid { padding: 20px; display: grid; gap: 18px; }
+    .settings-card { padding: 22px; display: grid; gap: 18px; }
+    .setting-row { display: grid; gap: 10px; }
+    .setting-row label { font-size: 14px; color: var(--text-muted); }
+    .setting-row input, .setting-row select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text); }
+    .switch { position: relative; width: 54px; height: 30px; border-radius: 999px; background: rgba(93,49,200,0.12); }
+    .switch input { opacity:0; width:100%; height:100%; margin:0; position:absolute; cursor:pointer; }
+    .switch-slider { position:absolute; top:4px; left:4px; width:22px; height:22px; border-radius:50%; background:#fff; transition: transform 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
+    .switch input:checked + .switch-slider { transform: translateX(24px); }
+    .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; height: 92px; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-around; padding: 0 16px; box-shadow: 0 -18px 40px rgba(0,0,0,0.08); }
+    .nav-btn { flex:1; max-width: 180px; background: transparent; color: var(--text); display: grid; place-items: center; border-radius: 20px; padding: 12px 8px; transition: background 0.2s ease, transform 0.2s ease; }
+    .nav-btn.active { background: rgba(255,255,255,0.22); color: #fff; transform: translateY(-2px); box-shadow: 0 16px 34px rgba(93,49,200,0.12); }
+    .nav-btn:hover:not(.active) { background: rgba(93,49,200,0.06); }
+    .nav-btn span { font-size: 13px; margin-top: 8px; display:block; }
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(10,8,20,0.72); z-index: 120; }
+    .modal.active { display: flex; }
+    .modal-card { width: min(760px,100%); max-height: calc(100vh - 52px); overflow: hidden; border-radius: 32px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; }
+    .camera-frame { position: relative; overflow: hidden; aspect-ratio: 4 / 5; background: #000; }
+    .camera-frame video { width: 100%; height: 100%; object-fit: cover; }
+    .camera-overlay { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 22%, transparent 78%, rgba(255,255,255,0.03) 100%); }
+    .camera-overlay::after { content: "Aproxime o documento para melhor leitura"; color: #fff; padding: 12px 18px; background: rgba(0,0,0,0.42); border-radius: 999px; font-size: 13px; box-shadow: 0 16px 36px rgba(0,0,0,0.22); }
+    .camera-controls { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; background: var(--surface); }
+    .camera-actions { display: flex; gap: 12px; }
+    .cam-action { width: 52px; height: 52px; border-radius: 18px; background: var(--surface-strong); display: grid; place-items: center; color: var(--text); box-shadow: var(--shadow); }
+    .capture-btn { width: 76px; height: 76px; border-radius: 24px; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-size: 24px; display: grid; place-items: center; box-shadow: 0 20px 46px rgba(93,49,200,0.28); }
+    .preview-meta { padding: 18px 22px; display: grid; gap: 14px; }
+    .preview-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 12px; padding: 0 22px 20px; }
+    .preview-img { width: 100%; height: auto; border-radius: 24px; object-fit: contain; background: #000; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-size: 18px; margin: 0; }
+    .modal-close { width: 46px; height: 46px; border-radius: 16px; background: var(--surface-strong); display: grid; place-items: center; color: var(--text); }
+    .toast { position: fixed; left: 50%; top: 22px; transform: translateX(-50%) translateY(-120%); padding: 14px 20px; border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); z-index: 140; opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .loading { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,8,20,0.70); z-index: 130; }
+    .loading.active { display: flex; }
+    .loading-card { width: min(420px,100%); padding: 26px; background: var(--surface); border-radius: 26px; text-align:center; border:1px solid var(--border); box-shadow: var(--shadow); }
+    .spinner { width: 54px; height: 54px; border: 6px solid rgba(93,49,200,0.14); border-top-color: var(--primary); border-radius:50%; animation: spin 1s linear infinite; margin:0 auto 18px; }
+    .progress-bar { width:100%; height: 8px; background: var(--surface-strong); border-radius: 999px; overflow:hidden; margin-top: 18px; }
+    .progress-fill { width:0%; height:100%; background: linear-gradient(135deg,#5d31c8,#7b5dff); transition: width 0.2s ease; }
+    .file-list { display: grid; gap: 12px; padding: 20px; }
+    .file-item { display: flex; align-items: center; gap: 12px; background: var(--surface-strong); padding: 14px 16px; border-radius: 20px; border: 1px solid var(--border); }
+    .file-icon { width: 44px; height: 44px; border-radius: 16px; background: var(--primary-soft); display: grid; place-items: center; font-size:18px; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name { font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-size { color: var(--text-muted); font-size: 13px; }
+    @keyframes fadeIn { from {opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 900px) {
+      .status-card { grid-template-columns: 1fr; }
+      .hero-card, .settings-card, .tool-grid, .scanner-card { padding: 18px; }
+      .bottom-nav { height: 96px; padding: 0 12px; }
+    }
+    @media (max-width: 620px) {
+      .app { padding: 14px 14px 0; }
+      body { padding-bottom: 126px; }
+      .topbar { flex-wrap: wrap; gap: 12px; }
+      .brand-title strong { font-size: 16px; }
+      .hero-card { border-radius: 24px; }
+      .btn { width: 100%; justify-content: center; }
+      .nav-btn { max-width: none; padding: 14px 10px; }
+      .camera-controls { flex-wrap: wrap; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div class="brand-title">
+          <strong>ScanMaster Pro</strong>
+          <span>Scanner moderno e funcional</span>
+        </div>
+      </div>
+      <button id="themeToggle" class="icon-btn" aria-label="Alternar tema">🌙</button>
+    </header>
+    <div class="content">
+      <section id="scannerSection" class="page active">
+        <div class="status-card">
+          <div class="status-block">
+            <strong>Páginas capturadas</strong>
+            <span id="pageCount">0</span>
+          </div>
+          <div class="status-block">
+            <strong>Qualidade</strong>
+            <span id="qualityLabel">Alta</span>
+          </div>
+          <div class="status-block">
+            <strong>Saída</strong>
+            <span id="pageSizeLabel">A4</span>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div>
+            <h2>Scanner instantâneo</h2>
+            <p>Abra a câmera, capture o documento de perto e gere um PDF profissional em segundos.</p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="openCameraBtn">Clique para Scanner</button>
+            <button class="btn btn-secondary" id="addImageBtn">+ Adicionar imagem</button>
+          </div>
+          <div class="scanner-summary">
+            <button class="mini-btn" id="generatePdfBtn">Gerar PDF</button>
+            <button class="mini-btn" id="downloadPdfBtn">Baixar PDF</button>
+          </div>
+        </div>
+        <div id="pagesGrid" class="page-grid"></div>
+      </section>
+      <section id="toolsSection" class="page">
+        <div class="tool-grid">
+          <div class="tool-card">
+            <h3>Mesclar PDFs</h3>
+            <p>Junte múltiplos arquivos em um único PDF.</p>
+            <button type="button" class="btn btn-secondary" id="mergeBtn">Selecionar PDFs</button>
+          </div>
+          <div class="tool-card">
+            <h3>Comprimir PDF</h3>
+            <p>Reduza o tamanho do arquivo para envio rápido.</p>
+            <button type="button" class="btn btn-secondary" id="compressBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card">
+            <h3>Extrair Páginas</h3>
+            <p>Extraia páginas específicas de um PDF.</p>
+            <button type="button" class="btn btn-secondary" id="extractBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card">
+            <h3>Rotacionar PDF</h3>
+            <p>Gire o PDF inteiro em 90°, 180° ou 270°.</p>
+            <button type="button" class="btn btn-secondary" id="rotateBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card">
+            <h3>Marca d'água</h3>
+            <p>Adicione texto visível em todas as páginas.</p>
+            <button type="button" class="btn btn-secondary" id="watermarkBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card">
+            <h3>OCR Texto</h3>
+            <p>Extraia texto de imagens ou PDFs.</p>
+            <button type="button" class="btn btn-secondary" id="ocrBtn">Selecionar arquivo</button>
+          </div>
+          <div class="tool-card">
+            <h3>PDF → JPG</h3>
+            <p>Converta páginas de PDF em imagens JPG.</p>
+            <button type="button" class="btn btn-secondary" id="toJpgBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card">
+            <h3>Imagem → PDF</h3>
+            <p>Transforme suas fotos em um documento PDF.</p>
+            <button type="button" class="btn btn-secondary" id="toPdfBtn">Selecionar imagens</button>
+          </div>
+        </div>
+        <div class="file-list" id="importedList"></div>
+      </section>
+      <section id="settingsSection" class="page">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <div class="setting-row">
+              <label for="themeSwitch">Tema</label>
+              <label class="switch">
+                <input type="checkbox" id="themeSwitch">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label for="pdfQuality">Qualidade do PDF</label>
+              <select id="pdfQuality">
+                <option value="0.6">Baixa</option>
+                <option value="0.8">Média</option>
+                <option value="0.95">Alta</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="defaultName">Nome padrão do arquivo</label>
+              <input type="text" id="defaultName" placeholder="documento_scan">
+            </div>
+            <div class="setting-row">
+              <label for="pageSize">Tamanho da página</label>
+              <select id="pageSize">
+                <option value="a4">A4</option>
+                <option value="letter">Carta</option>
+                <option value="auto">Automático</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="watermarkToggle">Marca d'água</label>
+              <label class="switch">
+                <input type="checkbox" id="watermarkToggle">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3>Sobre</h3>
+            <p>ScanMaster Pro é um app de scanner offline, feito em HTML, CSS e JavaScript puro. Funciona diretamente no navegador, sem instalação.</p>
+            <p style="color: var(--text-muted);">Versão 1.0 · Design inspirado em apps Android profissionais.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-target="scannerSection"><span>📷</span>Scanner</button>
+    <button class="nav-btn" data-target="toolsSection"><span>🛠️</span>Ferramentas</button>
+    <button class="nav-btn" data-target="settingsSection"><span>⚙️</span>Ajustes</button>
+  </nav>
+
+  <div class="modal" id="cameraModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <p class="modal-title" id="cameraModalTitle">Câmera do scanner</p>
+          <span style="color: var(--text-muted); font-size: 14px;">Aproxime o documento para melhor leitura.</span>
+        </div>
+        <button class="modal-close" id="closeCameraBtn" aria-label="Fechar câmera">✕</button>
+      </div>
+      <div class="camera-frame">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="camera-overlay"></div>
+      </div>
+      <div class="camera-controls">
+        <div class="camera-actions">
+          <button class="cam-action" id="switchCamBtn" title="Trocar câmera" aria-label="Trocar câmera">🔄</button>
+          <button class="cam-action" id="toggleFlashBtn" title="Flash" aria-label="Alternar flash">⚡</button>
+        </div>
+        <button class="capture-btn" id="captureBtn" aria-label="Capturar foto">📸</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="previewModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="previewModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <p class="modal-title" id="previewModalTitle">Editar imagem</p>
+        <button class="modal-close" id="closePreviewBtn" aria-label="Fechar edição">✕</button>
+      </div>
+      <img id="previewImg" class="preview-img" src="" alt="Pré-visualização">
+      <div class="preview-meta">
+        <p id="previewLabel">Página 0</p>
+      </div>
+      <div class="preview-actions">
+        <button type="button" class="btn btn-secondary" id="rotatePageBtn">Girar</button>
+        <button type="button" class="btn btn-secondary" id="cropPageBtn">Cortar</button>
+        <button type="button" class="btn btn-secondary" id="sharpenPageBtn">Nitidez</button>
+        <button type="button" class="btn btn-secondary" id="bwPageBtn">P&B</button>
+        <button type="button" class="btn btn-secondary" id="grayscalePageBtn">Cinza</button>
+        <button type="button" class="btn btn-secondary" id="contrastPageBtn">Contraste</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="extractModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="extractModalTitle">
+    <div class="modal-card" style="max-width: 720px;">
+      <div class="modal-header">
+        <p class="modal-title" id="extractModalTitle">Extrair páginas</p>
+        <button class="modal-close" id="closeExtractModalBtn" aria-label="Fechar extração">✕</button>
+      </div>
+      <div class="preview-meta" style="padding-bottom:0;">
+        <label style="display:flex; align-items:center; gap:12px;"><input type="checkbox" id="selectAll">Selecionar todas</label>
+      </div>
+      <div class="page-grid" id="extractGrid" style="padding: 0 20px 20px;"></div>
+      <div style="display:flex; justify-content:flex-end; gap: 12px; padding:0 20px 20px;">
+        <button type="button" class="btn btn-secondary" id="cancelExtractBtn">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="doExtractBtn">Extrair Selecionadas</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loadingText">Processando...</p>
+      <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  <input type="file" id="mergeInput" accept=".pdf" multiple hidden>
+  <input type="file" id="compressInput" accept=".pdf" hidden>
+  <input type="file" id="extractInput" accept=".pdf" hidden>
+  <input type="file" id="rotateInput" accept=".pdf" hidden>
+  <input type="file" id="watermarkInput" accept=".pdf" hidden>
+  <input type="file" id="ocrInput" accept=".pdf,image/*" hidden>
+  <input type="file" id="toJpgInput" accept=".pdf" hidden>
+  <input type="file" id="toPdfInput" accept="image/*" multiple hidden>
+
+  <script>
+    const settingsKey = 'scanmaster-settings';
+    const state = {
+      pages: [],
+      currentPageIdx: -1,
+      currentStream: null,
+      facingMode: 'environment',
+      hasTorch: false,
+      torchOn: false,
+      generatedPdfUrl: '',
+      generatedPdfName: '',
+      importedFiles: [],
+      extractData: { pages: [], selected: [] },
+      settings: {
+        theme: 'light',
+        quality: 0.95,
+        defaultName: 'documento_scan',
+        pageSize: 'a4',
+        watermark: false
+      }
+    };
+
+    const pageSizeNames = { a4: 'A4', letter: 'Carta', auto: 'Automático' };
+    const pageSizes = { a4: 'a4', letter: 'letter', auto: 'a4' };
+    let jsPDF = null;
+    let lastFocusedElement = null;
+    let activeModal = null;
+    let disabledTabindexElements = [];
+
+    const modalFocusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    function getFocusableElements(modal) {
+      return Array.from(modal.querySelectorAll(modalFocusableSelectors))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+    }
+
+    function disableOutsideFocus(modal) {
+      const allFocusable = Array.from(document.querySelectorAll(modalFocusableSelectors)).filter(el => !el.disabled && el.offsetParent !== null);
+      disabledTabindexElements = allFocusable.filter(el => !modal.contains(el));
+      disabledTabindexElements.forEach(el => {
+        if (el.hasAttribute('tabindex')) {
+          el.dataset.prevTabindex = el.getAttribute('tabindex');
+        }
+        el.setAttribute('tabindex', '-1');
+      });
+    }
+
+    function restoreOutsideFocus() {
+      disabledTabindexElements.forEach(el => {
+        if (el.dataset.prevTabindex !== undefined) {
+          el.setAttribute('tabindex', el.dataset.prevTabindex);
+          delete el.dataset.prevTabindex;
+        } else {
+          el.removeAttribute('tabindex');
+        }
+      });
+      disabledTabindexElements = [];
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      lastFocusedElement = document.activeElement;
+      activeModal = modal;
+      modal.setAttribute('aria-hidden', 'false');
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      disableOutsideFocus(modal);
+      document.addEventListener('focusin', trapFocus);
+      const closeButton = modal.querySelector('.modal-close');
+      const focusables = getFocusableElements(modal);
+      if (closeButton) {
+        closeButton.focus();
+      } else if (focusables.length) {
+        focusables[0].focus();
+      }
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.setAttribute('aria-hidden', 'true');
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+      restoreOutsideFocus();
+      document.removeEventListener('focusin', trapFocus);
+      activeModal = null;
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+      }
+      lastFocusedElement = null;
+    }
+
+    function trapFocus(event) {
+      if (!activeModal) return;
+      if (activeModal.contains(event.target)) return;
+      const focusables = getFocusableElements(activeModal);
+      if (focusables.length) {
+        event.preventDefault();
+        focusables[0].focus();
+      }
+    }
+
+    function handleModalKeydown(event) {
+      window.__handleModalKeydownCount = (window.__handleModalKeydownCount || 0) + 1;
+      if (!activeModal) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal(activeModal.id);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = getFocusableElements(activeModal);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    function revokeGeneratedPdf() {
+      if (state.generatedPdfUrl) {
+        try {
+          URL.revokeObjectURL(state.generatedPdfUrl);
+        } catch (e) {
+          // ignore
+        }
+        state.generatedPdfUrl = '';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      bindUI();
+      loadSettings();
+      renderNav();
+      renderPages();
+      renderImported();
+      restoreTheme();
+      updateInfoCards();
+      jsPDF = window.jspdf?.jsPDF || window.jsPDF;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Seu navegador não suporta câmera', true);
+      }
+      document.addEventListener('keydown', handleModalKeydown);
+    });
+
+    function bindUI() {
+      document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+      document.getElementById('openCameraBtn').addEventListener('click', openCamera);
+      document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
+      document.getElementById('switchCamBtn').addEventListener('click', toggleCamera);
+      document.getElementById('toggleFlashBtn').addEventListener('click', toggleFlash);
+      document.getElementById('captureBtn').addEventListener('click', capturePhoto);
+      document.getElementById('addImageBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+      document.getElementById('fileInput').addEventListener('change', event => handleImageFiles(event.target.files));
+      document.getElementById('generatePdfBtn').addEventListener('click', generatePdf);
+      document.getElementById('downloadPdfBtn').addEventListener('click', downloadPdf);
+      document.getElementById('closePreviewBtn').addEventListener('click', closePreview);
+      document.getElementById('pdfQuality').addEventListener('change', saveSettings);
+      document.getElementById('defaultName').addEventListener('input', saveSettings);
+      document.getElementById('pageSize').addEventListener('change', saveSettings);
+      document.getElementById('watermarkToggle').addEventListener('change', saveSettings);
+      document.getElementById('mergeInput').addEventListener('change', mergePDFs);
+      document.getElementById('compressInput').addEventListener('change', compressPDF);
+      document.getElementById('extractInput').addEventListener('change', extractPages);
+      document.getElementById('rotateInput').addEventListener('change', rotatePDF);
+      document.getElementById('watermarkInput').addEventListener('change', addWatermark);
+      document.getElementById('ocrInput').addEventListener('change', ocrProcess);
+      document.getElementById('toJpgInput').addEventListener('change', pdfToJpg);
+      document.getElementById('toPdfInput').addEventListener('change', imagesToPdf);
+      document.getElementById('mergeBtn').addEventListener('click', () => document.getElementById('mergeInput').click());
+      document.getElementById('compressBtn').addEventListener('click', () => document.getElementById('compressInput').click());
+      document.getElementById('extractBtn').addEventListener('click', () => document.getElementById('extractInput').click());
+      document.getElementById('rotateBtn').addEventListener('click', () => document.getElementById('rotateInput').click());
+      document.getElementById('watermarkBtn').addEventListener('click', () => document.getElementById('watermarkInput').click());
+      document.getElementById('ocrBtn').addEventListener('click', () => document.getElementById('ocrInput').click());
+      document.getElementById('toJpgBtn').addEventListener('click', () => document.getElementById('toJpgInput').click());
+      document.getElementById('toPdfBtn').addEventListener('click', () => document.getElementById('toPdfInput').click());
+      document.getElementById('selectAll').addEventListener('change', toggleAllExtract);
+      document.getElementById('closeExtractModalBtn').addEventListener('click', () => closeModal('extractModal'));
+      document.getElementById('cancelExtractBtn').addEventListener('click', () => closeModal('extractModal'));
+      document.getElementById('doExtractBtn').addEventListener('click', doExtract);
+      document.getElementById('rotatePageBtn').addEventListener('click', () => rotateCurrentPage(90));
+      document.getElementById('cropPageBtn').addEventListener('click', () => applyEdit('crop'));
+      document.getElementById('sharpenPageBtn').addEventListener('click', () => applyEdit('sharpen'));
+      document.getElementById('bwPageBtn').addEventListener('click', () => applyEdit('bw'));
+      document.getElementById('grayscalePageBtn').addEventListener('click', () => applyEdit('grayscale'));
+      document.getElementById('contrastPageBtn').addEventListener('click', () => applyEdit('contrast'));
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.target, btn));
+      });
+    }
+
+    function renderNav() {
+      const active = document.querySelector('.nav-btn.active');
+      if (active) return;
+      switchTab('scannerSection', document.querySelector('.nav-btn'));
+    }
+
+    function switchTab(target, button) {
+      document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+      document.getElementById(target).classList.add('active');
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+      if (button) button.classList.add('active');
+    }
+
+    function loadSettings() {
+      const saved = JSON.parse(localStorage.getItem(settingsKey) || '{}');
+      state.settings = { ...state.settings, ...saved };
+      document.getElementById('pdfQuality').value = state.settings.quality;
+      document.getElementById('defaultName').value = state.settings.defaultName;
+      document.getElementById('pageSize').value = state.settings.pageSize;
+      document.getElementById('watermarkToggle').checked = state.settings.watermark;
+      document.getElementById('themeSwitch').checked = state.settings.theme === 'dark';
+      document.getElementById('qualityLabel').textContent = state.settings.quality === 0.95 ? 'Alta' : state.settings.quality === 0.8 ? 'Média' : 'Baixa';
+      document.getElementById('pageSizeLabel').textContent = pageSizeNames[state.settings.pageSize];
+    }
+
+    function saveSettings() {
+      state.settings.quality = parseFloat(document.getElementById('pdfQuality').value);
+      state.settings.defaultName = document.getElementById('defaultName').value.trim() || 'documento_scan';
+      state.settings.pageSize = document.getElementById('pageSize').value;
+      state.settings.watermark = document.getElementById('watermarkToggle').checked;
+      state.settings.theme = document.getElementById('themeSwitch').checked ? 'dark' : 'light';
+      localStorage.setItem(settingsKey, JSON.stringify(state.settings));
+      document.getElementById('qualityLabel').textContent = state.settings.quality === 0.95 ? 'Alta' : state.settings.quality === 0.8 ? 'Média' : 'Baixa';
+      document.getElementById('pageSizeLabel').textContent = pageSizeNames[state.settings.pageSize];
+      restoreTheme();
+    }
+
+    function restoreTheme() {
+      const theme = state.settings.theme;
+      document.documentElement.setAttribute('data-theme', theme);
+      document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+
+    function toggleTheme() {
+      document.getElementById('themeSwitch').checked = !document.getElementById('themeSwitch').checked;
+      saveSettings();
+    }
+
+    function openCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return showToast('Câmera indisponível no seu navegador.', true);
+      }
+      openModal('cameraModal');
+      startCamera();
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: state.facingMode }, width: { ideal: 1280 }, height: { ideal: 960 } },
+          audio: false
+        });
+        state.currentStream = stream;
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+        await video.play();
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        state.hasTorch = !!(capabilities.torch);
+        document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
+      } catch (error) {
+        showToast('Erro ao abrir câmera: ' + error.message, true);
+      }
+    }
+
+    function closeCamera() {
+      if (state.currentStream) {
+        state.currentStream.getTracks().forEach(track => track.stop());
+      }
+      state.currentStream = null;
+      state.torchOn = false;
+      closeModal('cameraModal');
+    }
+
+    async function toggleCamera() {
+      state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+      if (state.currentStream) {
+        closeCamera();
+      }
+      openCamera();
+    }
+
+    async function toggleFlash() {
+      if (!state.currentStream) {
+        return showToast('Abra a câmera primeiro.', true);
+      }
+      const track = state.currentStream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities();
+      if (!capabilities.torch) {
+        return showToast('Flash não disponível neste dispositivo.', true);
+      }
+      state.torchOn = !state.torchOn;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: state.torchOn }] });
+        showToast(state.torchOn ? 'Flash ativado' : 'Flash desativado');
+      } catch (error) {
+        showToast('Falha ao alternar flash.', true);
+      }
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById('video');
+      if (!video || video.readyState < 2) {
+        return showToast('Câmera ainda não está pronta.', true);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+      state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: 'none' });
+      renderPages();
+      updateInfoCards();
+      showToast('Página capturada com sucesso');
+    }
+
+    function handleImageFiles(files) {
+      if (!files.length) return;
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = event => {
+          state.pages.push({ id: Date.now() + Math.random(), dataUrl: event.target.result, rotation: 0, filter: 'none' });
+          renderPages();
+          updateInfoCards();
+        };
+        reader.readAsDataURL(file);
+      });
+      document.getElementById('fileInput').value = '';
+      showToast('Imagem(s) adicionada(s)');
+    }
+
+    function renderPages() {
+      const grid = document.getElementById('pagesGrid');
+      grid.innerHTML = '';
+      if (!state.pages.length) {
+        const empty = document.createElement('div');
+        empty.className = 'page-placeholder';
+        empty.textContent = 'Nenhuma página adicionada. Use o scanner ou adicione imagens.';
+        grid.appendChild(empty);
+        return;
+      }
+      state.pages.forEach((page, index) => {
+        const card = document.createElement('div');
+        card.className = 'page-card';
+        card.draggable = true;
+        card.dataset.index = index;
+        card.innerHTML = `
+          <img src="${page.dataUrl}" alt="Página ${index + 1}">
+          <div class="page-info">
+            <strong>Página ${index + 1}</strong>
+            <button class="page-remove" type="button" aria-label="Remover página">✕</button>
+          </div>`;
+        card.addEventListener('click', () => openPreview(index));
+        card.querySelector('.page-remove').addEventListener('click', event => {
+          event.stopPropagation();
+          removePage(index);
+        });
+        card.addEventListener('dragstart', dragStart);
+        card.addEventListener('dragover', dragOver);
+        card.addEventListener('drop', dropPage);
+        card.addEventListener('dragend', dragEnd);
+        grid.appendChild(card);
+      });
+    }
+
+    function dragStart(event) {
+      event.currentTarget.classList.add('dragging');
+      event.dataTransfer.setData('text/plain', event.currentTarget.dataset.index);
+    }
+    function dragOver(event) {
+      event.preventDefault();
+    }
+    function dropPage(event) {
+      event.preventDefault();
+      const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+      const toIndex = Number(event.currentTarget.dataset.index);
+      if (fromIndex === toIndex) return;
+      const moved = state.pages.splice(fromIndex, 1)[0];
+      state.pages.splice(toIndex, 0, moved);
+      renderPages();
+      showToast('Páginas reordenadas');
+    }
+    function dragEnd(event) {
+      event.currentTarget.classList.remove('dragging');
+    }
+
+    function removePage(index) {
+      state.pages.splice(index, 1);
+      renderPages();
+      updateInfoCards();
+      showToast('Página removida');
+    }
+
+    function updateInfoCards() {
+      document.getElementById('pageCount').textContent = state.pages.length;
+      document.getElementById('qualityLabel').textContent = state.settings.quality === 0.95 ? 'Alta' : state.settings.quality === 0.8 ? 'Média' : 'Baixa';
+      document.getElementById('pageSizeLabel').textContent = pageSizeNames[state.settings.pageSize];
+    }
+
+    function openPreview(index) {
+      state.currentPageIdx = index;
+      const page = state.pages[index];
+      document.getElementById('previewImg').src = page.dataUrl;
+      document.getElementById('previewLabel').textContent = `Página ${index + 1}`;
+      openModal('previewModal');
+    }
+
+    function closePreview() {
+      state.currentPageIdx = -1;
+      closeModal('previewModal');
+    }
+
+    function applyEdit(action) {
+      if (state.currentPageIdx < 0) return;
+      const page = state.pages[state.currentPageIdx];
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+
+        if (action === 'crop') {
+          const crop = 0.08;
+          const cropX = Math.round(width * crop);
+          const cropY = Math.round(height * crop);
+          const cropW = width - cropX * 2;
+          const cropH = height - cropY * 2;
+          const cropped = document.createElement('canvas');
+          cropped.width = cropW;
+          cropped.height = cropH;
+          cropped.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+          page.dataUrl = cropped.toDataURL('image/jpeg', state.settings.quality);
+        } else if (action === 'sharpen') {
+          const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+          convolve(ctx, imageData, kernel, 3);
+          page.dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+        } else if (action === 'bw') {
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const value = avg > 128 ? 255 : 0;
+            data[i] = data[i + 1] = data[i + 2] = value;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          page.dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+        } else if (action === 'grayscale') {
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            data[i] = data[i + 1] = data[i + 2] = avg;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          page.dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+        } else if (action === 'contrast') {
+          const f = (259 * (128 + 255)) / (255 * (259 - 128));
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = clamp(f * (data[i] - 128) + 128);
+            data[i + 1] = clamp(f * (data[i + 1] - 128) + 128);
+            data[i + 2] = clamp(f * (data[i + 2] - 128) + 128);
+          }
+          ctx.putImageData(imageData, 0, 0);
+          page.dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+        }
+        document.getElementById('previewImg').src = page.dataUrl;
+        renderPages();
+        showToast('Edição aplicada');
+      };
+      img.src = page.dataUrl;
+    }
+
+    function convolve(ctx, imageData, kernel, size) {
+      const side = size;
+      const half = Math.floor(side / 2);
+      const src = imageData.data;
+      const width = imageData.width;
+      const height = imageData.height;
+      const output = ctx.createImageData(width, height);
+      const dst = output.data;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let r = 0, g = 0, b = 0;
+          for (let ky = 0; ky < side; ky++) {
+            for (let kx = 0; kx < side; kx++) {
+              const ix = x + kx - half;
+              const iy = y + ky - half;
+              if (ix >= 0 && ix < width && iy >= 0 && iy < height) {
+                const srcPos = (iy * width + ix) * 4;
+                const wt = kernel[ky * side + kx];
+                r += src[srcPos] * wt;
+                g += src[srcPos + 1] * wt;
+                b += src[srcPos + 2] * wt;
+              }
+            }
+          }
+          const dstPos = (y * width + x) * 4;
+          dst[dstPos] = clamp(r);
+          dst[dstPos + 1] = clamp(g);
+          dst[dstPos + 2] = clamp(b);
+          dst[dstPos + 3] = src[dstPos + 3];
+        }
+      }
+      ctx.putImageData(output, 0, 0);
+    }
+
+    function clamp(value) {
+      return Math.max(0, Math.min(255, value));
+    }
+
+    function rotateCurrentPage(deg) {
+      if (state.currentPageIdx < 0) return;
+      const page = state.pages[state.currentPageIdx];
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        if (deg % 180 === 0) {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        } else {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(deg * Math.PI / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        page.dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
+        document.getElementById('previewImg').src = page.dataUrl;
+        renderPages();
+        showToast('Imagem girada');
+      };
+      img.src = page.dataUrl;
+    }
+
+    async function generatePdf() {
+      if (!state.pages.length) return showToast('Adicione pelo menos uma página.', true);
+      revokeGeneratedPdf();
+      showLoading('Gerando PDF...');
+      try {
+        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: pageSizes[state.settings.pageSize] });
+        state.pages.forEach((page, index) => {
+          if (index > 0) pdf.addPage();
+          const imgProps = pdf.getImageProperties(page.dataUrl);
+          const pw = pdf.internal.pageSize.getWidth();
+          const ph = pdf.internal.pageSize.getHeight();
+          const ratio = Math.min(pw / imgProps.width, ph / imgProps.height);
+          const w = imgProps.width * ratio;
+          const h = imgProps.height * ratio;
+          const x = (pw - w) / 2;
+          const y = (ph - h) / 2;
+          pdf.addImage(page.dataUrl, 'JPEG', x, y, w, h, undefined, 'FAST');
+        });
+        state.generatedPdfName = `${state.settings.defaultName || 'documento_scan'}.pdf`;
+        state.generatedPdfUrl = pdf.output('bloburl');
+        showToast('PDF gerado com sucesso');
+      } catch (error) {
+        showToast('Erro ao gerar PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function downloadPdf() {
+      if (!state.generatedPdfUrl) {
+        return showToast('Gere o PDF antes de baixar.', true);
+      }
+      const link = document.createElement('a');
+      link.href = state.generatedPdfUrl;
+      link.download = state.generatedPdfName || `${state.settings.defaultName || 'documento_scan'}.pdf`;
+      link.click();
+      revokeGeneratedPdf();
+      showToast('Download iniciado');
+    }
+
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showLoading(text) {
+      document.getElementById('loadingText').textContent = text;
+      document.getElementById('loading').classList.add('active');
+      updateProgress(0);
+    }
+
+    function hideLoading() {
+      document.getElementById('loading').classList.remove('active');
+      updateProgress(0);
+    }
+
+    function updateProgress(value) {
+      document.getElementById('progressFill').style.width = `${Math.round(value * 100)}%`;
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.background = isError ? 'rgba(211,47,47,0.96)' : 'var(--surface)';
+      toast.style.color = isError ? '#fff' : 'var(--text)';
+      toast.classList.add('show');
+      clearTimeout(toast.timeout);
+      toast.timeout = setTimeout(() => toast.classList.remove('show'), 2800);
+    }
+
+    function handleImport(event) {
+      const files = Array.from(event.target.files);
+      files.forEach(file => state.importedFiles.push({ name: file.name, size: file.size, type: file.type, file }));
+      renderImported();
+      event.target.value = '';
+      showToast('Arquivos importados');
+    }
+
+    function renderImported() {
+      const list = document.getElementById('importedList');
+      list.innerHTML = '';
+      state.importedFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        const icon = file.type.includes('pdf') ? '📄' : file.type.startsWith('image/') ? '🖼️' : '📁';
+        item.innerHTML = `
+          <div class="file-icon">${icon}</div>
+          <div class="file-info">
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${formatBytes(file.size)}</div>
+          </div>
+          <button class="icon-btn remove-imported-btn" type="button" aria-label="Remover arquivo" style="width:38px;height:38px;border-radius:14px;">✕</button>`;
+        item.querySelector('.remove-imported-btn').addEventListener('click', () => removeImported(index));
+        list.appendChild(item);
+      });
+    }
+
+    function removeImported(index) {
+      state.importedFiles.splice(index, 1);
+      renderImported();
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(1)} MB`;
+    }
+
+    async function mergePDFs(event) {
+      const files = Array.from(event.target.files);
+      if (files.length < 2) return showToast('Selecione pelo menos 2 PDFs.', true);
+      showLoading('Mesclando PDFs...');
+      try {
+        const outputPdf = new jsPDF({ compress: true });
+        let pageCount = 0;
+        for (const file of files) {
+          const buffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            const image = canvas.toDataURL('image/jpeg', 0.85);
+            if (pageCount > 0) outputPdf.addPage();
+            const props = outputPdf.getImageProperties(image);
+            const pdfWidth = outputPdf.internal.pageSize.getWidth();
+            const ratio = pdfWidth / props.width;
+            outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+            pageCount++;
+            updateProgress(pageCount / (pdf.numPages * files.length));
+          }
+        }
+        outputPdf.save('pdf_mesclado.pdf');
+        showToast('PDF mesclado com sucesso');
+      } catch (error) {
+        showToast('Erro ao mesclar: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function compressPDF(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      showLoading('Comprimindo PDF...');
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const outputPdf = new jsPDF({ compress: true });
+        for (let i = 1; i <= pdf.numPages; i++) {
+          if (i > 1) outputPdf.addPage();
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const image = canvas.toDataURL('image/jpeg', 0.7);
+          const props = outputPdf.getImageProperties(image);
+          const pdfWidth = outputPdf.internal.pageSize.getWidth();
+          const ratio = pdfWidth / props.width;
+          outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+          updateProgress(i / pdf.numPages);
+        }
+        outputPdf.save('pdf_comprimido.pdf');
+        showToast('PDF comprimido');
+      } catch (error) {
+        showToast('Erro ao comprimir: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function extractPages(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      showLoading('Carregando PDF...');
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        state.extractData = { pages: [], selected: [] };
+        const grid = document.getElementById('extractGrid');
+        grid.innerHTML = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          state.extractData.pages.push({ num: i, dataUrl });
+          state.extractData.selected.push(false);
+          const card = document.createElement('div');
+          card.className = 'page-card';
+          card.id = `ex-${i}`;
+          card.setAttribute('role', 'button');
+          card.tabIndex = 0;
+          card.setAttribute('aria-pressed', 'false');
+          card.innerHTML = `<img src="${dataUrl}"><div class="page-info"><strong>Pág ${i}</strong></div>`;
+          card.style.border = '2px solid transparent';
+          card.addEventListener('click', () => toggleExtract(i - 1));
+          card.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggleExtract(i - 1);
+            }
+          });
+          grid.appendChild(card);
+          updateProgress(i / pdf.numPages);
+        }
+        openModal('extractModal');
+      } catch (error) {
+        showToast('Erro ao carregar PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    function toggleExtract(index) {
+      state.extractData.selected[index] = !state.extractData.selected[index];
+      const card = document.getElementById(`ex-${index + 1}`);
+      const isSelected = state.extractData.selected[index];
+      card.style.borderColor = isSelected ? 'var(--primary)' : 'transparent';
+      card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    }
+
+    function toggleAllExtract() {
+      const all = document.getElementById('selectAll').checked;
+      state.extractData.selected = state.extractData.pages.map(() => all);
+      state.extractData.pages.forEach((item, index) => {
+        const card = document.getElementById(`ex-${index + 1}`);
+        card.style.borderColor = all ? 'var(--primary)' : 'transparent';
+      });
+    }
+
+    async function doExtract() {
+      const selected = state.extractData.pages.filter((_, index) => state.extractData.selected[index]);
+      if (!selected.length) return showToast('Selecione pelo menos uma página.', true);
+      showLoading('Gerando PDF...');
+      try {
+        const pdf = new jsPDF({ compress: true });
+        selected.forEach((item, index) => {
+          if (index > 0) pdf.addPage();
+          const props = pdf.getImageProperties(item.dataUrl);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const ratio = pdfWidth / props.width;
+          pdf.addImage(item.dataUrl, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+        });
+        pdf.save('paginas_extraidas.pdf');
+        showToast('Páginas extraídas');
+        closeModal('extractModal');
+      } catch (error) {
+        showToast('Erro ao extrair: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function rotatePDF(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const angle = prompt('Informe ângulo: 90, 180 ou 270', '90');
+      const deg = parseInt(angle, 10);
+      if (![90, 180, 270].includes(deg)) return showToast('Ângulo inválido', true);
+      showLoading('Rotacionando PDF...');
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const outputPdf = new jsPDF({ compress: true });
+        for (let i = 1; i <= pdf.numPages; i++) {
+          if (i > 1) outputPdf.addPage();
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          if (deg === 90 || deg === 270) {
+            canvas.width = viewport.height;
+            canvas.height = viewport.width;
+          } else {
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+          }
+          const ctx = canvas.getContext('2d');
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate(deg * Math.PI / 180);
+          ctx.drawImage(await renderPdfPageToCanvas(page, viewport), -viewport.width / 2, -viewport.height / 2);
+          const image = canvas.toDataURL('image/jpeg', 0.85);
+          const props = outputPdf.getImageProperties(image);
+          const pdfWidth = outputPdf.internal.pageSize.getWidth();
+          const ratio = pdfWidth / props.width;
+          outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+          updateProgress(i / pdf.numPages);
+        }
+        outputPdf.save('pdf_rotacionado.pdf');
+        showToast('PDF rotacionado');
+      } catch (error) {
+        showToast('Erro: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function renderPdfPageToCanvas(page, viewport) {
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      return canvas;
+    }
+
+    async function addWatermark(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const text = prompt('Texto da marca d\'água:', 'CONFIDENCIAL');
+      if (!text) return showToast('Marca d\'água cancelada', true);
+      showLoading('Aplicando marca...');
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const outputPdf = new jsPDF({ compress: true });
+        for (let i = 1; i <= pdf.numPages; i++) {
+          if (i > 1) outputPdf.addPage();
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          ctx.save();
+          ctx.globalAlpha = 0.3;
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 60px Arial';
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate(-Math.PI / 4);
+          ctx.textAlign = 'center';
+          ctx.fillText(text, 0, 0);
+          ctx.restore();
+          const image = canvas.toDataURL('image/jpeg', 0.85);
+          const props = outputPdf.getImageProperties(image);
+          const pdfWidth = outputPdf.internal.pageSize.getWidth();
+          const ratio = pdfWidth / props.width;
+          outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+          updateProgress(i / pdf.numPages);
+        }
+        outputPdf.save('pdf_marca_dagua.pdf');
+        showToast('Marca d\'água aplicada');
+      } catch (error) {
+        showToast('Erro: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function ocrProcess(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      showLoading('Processando OCR...');
+      try {
+        let text = '';
+        if (file.type.startsWith('image/')) {
+          const imageUrl = await readFile(file);
+          const result = await Tesseract.recognize(imageUrl, 'por+eng');
+          text = result.data.text;
+        } else {
+          const buffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            const imageUrl = canvas.toDataURL('image/png');
+            const result = await Tesseract.recognize(imageUrl, 'por+eng');
+            text += `\n--- Página ${i} ---\n${result.data.text}\n`;
+            updateProgress(i / pdf.numPages);
+          }
+        }
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'texto_extraido.txt';
+        link.click();
+        showToast('OCR concluído');
+      } catch (error) {
+        showToast('Erro no OCR: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function pdfToJpg(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      showLoading('Convertendo PDF...');
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const imageUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const link = document.createElement('a');
+          link.href = imageUrl;
+          link.download = `pagina_${i}.jpg`;
+          link.click();
+          updateProgress(i / pdf.numPages);
+        }
+        showToast('Conversão concluída');
+      } catch (error) {
+        showToast('Erro: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+
+    async function imagesToPdf(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+      showLoading('Criando PDF...');
+      try {
+        const pdf = new jsPDF({ compress: true });
+        for (let i = 0; i < files.length; i++) {
+          const imageUrl = await readFile(files[i]);
+          const props = pdf.getImageProperties(imageUrl);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const ratio = pdfWidth / props.width;
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imageUrl, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+          updateProgress((i + 1) / files.length);
+        }
+        pdf.save('imagem_para_pdf.pdf');
+        showToast('PDF criado com sucesso');
+      } catch (error) {
+        showToast('Erro: ' + error.message, true);
+      } finally {
+        hideLoading();
+        event.target.value = '';
+      }
+    }
+  </script>
+</body>
+</html>
+
