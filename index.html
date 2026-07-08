@@ -113,9 +113,26 @@
     .nav-btn.active { background: rgba(255,255,255,0.22); color: #fff; transform: translateY(-2px); box-shadow: 0 16px 34px rgba(93,49,200,0.12); }
     .nav-btn:hover:not(.active) { background: rgba(93,49,200,0.06); }
     .nav-btn span { font-size: 13px; margin-top: 8px; display:block; }
-    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(10,8,20,0.72); z-index: 120; }
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(10,8,20,0.72); z-index: 120; overflow-x: hidden; }
     .modal.active { display: flex; }
-    .modal-card { width: min(760px,100%); max-height: 90vh; overflow: visible; border-radius: 32px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; }
+    .modal-card { width: min(820px, calc(100vw - 24px)); max-width: 100%; max-height: 90vh; overflow-y: auto; overflow-x: hidden; border-radius: 32px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; box-sizing: border-box; }
+    .watermark-modal-card { max-width: 820px; }
+    #watermarkModal .watermark-form { display: grid; gap: 12px; padding: 18px; }
+    #watermarkModal .watermark-row { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; }
+    #watermarkModal .watermark-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+    #watermarkModal .watermark-actions .btn { flex: 1 1 180px; min-width: 0; }
+    #watermarkModal .watermark-preview-row { display: grid; gap: 8px; }
+    #watermarkModal .watermark-preview-info { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #watermarkModal input, #watermarkModal select { width: 100%; }
+    #watermarkModal label { display: grid; gap: 8px; }
+    @media (max-width: 600px) {
+      .modal { padding: 12px; }
+      #watermarkModal .watermark-row { grid-template-columns: 1fr; }
+      #watermarkModal .watermark-actions { justify-content: stretch; }
+      #watermarkModal .watermark-actions .btn { width: 100%; }
+      #watermarkModal .watermark-preview-info { align-items: stretch; }
+      #watermarkModal .watermark-preview-info .btn { width: 100%; }
+    }
     .camera-frame { position: relative; overflow: hidden; aspect-ratio: 4 / 5; background: #000; }
     .camera-frame video { width: 100%; height: 100%; object-fit: cover; }
     .camera-overlay { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 22%, transparent 78%, rgba(255,255,255,0.03) 100%); }
@@ -381,7 +398,7 @@
   </div>
 
     <div class="modal" id="watermarkModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="watermarkModalTitle">
-      <div class="modal-card" style="max-width:820px;">
+      <div class="modal-card watermark-modal-card">
         <div class="modal-header">
           <div>
             <p class="modal-title" id="watermarkModalTitle">Marca d'água — Configurações</p>
@@ -389,11 +406,11 @@
           </div>
           <button class="modal-close" id="closeWatermarkModalBtn" aria-label="Fechar">✕</button>
         </div>
-        <div style="padding:18px; display:grid; gap:12px;">
-          <div style="display:grid; gap:8px; grid-template-columns: 1fr 1fr;">
+        <div class="watermark-form">
+          <div class="watermark-row">
             <label>
               Padrão
-              <select id="wmPattern" style="width:100%; padding:10px; border-radius:10px;">
+              <select id="wmPattern" style="padding:10px; border-radius:10px;">
                 <option value="corporate">Corporativo (RASCUNHO/CÓPIA)</option>
                 <option value="critical">Segurança Crítica (CONFIDENCIAL)</option>
                 <option value="institutional">Institucional (Papel timbrado)</option>
@@ -401,7 +418,7 @@
             </label>
             <label>
               Fonte
-              <select id="wmFont" style="width:100%; padding:10px; border-radius:10px;">
+              <select id="wmFont" style="padding:10px; border-radius:10px;">
                 <option>Arial</option>
                 <option>Calibri</option>
                 <option>Helvetica</option>
@@ -409,30 +426,30 @@
               </select>
             </label>
           </div>
-          <div style="display:grid; gap:8px; grid-template-columns: 1fr 1fr;">
+          <div class="watermark-row">
             <label>
               Texto
-              <input id="wmText" type="text" placeholder="CONFIDENCIAL" style="width:100%; padding:10px; border-radius:10px;">
+              <input id="wmText" type="text" placeholder="CONFIDENCIAL" style="padding:10px; border-radius:10px;">
             </label>
             <label>
               Cor
-              <input id="wmColor" type="color" value="#E0E0E0" style="width:100%; padding:6px; border-radius:10px;">
+              <input id="wmColor" type="color" value="#E0E0E0" style="padding:6px; border-radius:10px;">
             </label>
           </div>
-          <div style="display:grid; gap:8px; grid-template-columns: 1fr 1fr; align-items:center;">
+          <div class="watermark-row">
             <label>
               Opacidade <span id="wmOpacityLabel">20%</span>
-              <input id="wmOpacity" type="range" min="10" max="80" value="20" style="width:100%;">
+              <input id="wmOpacity" type="range" min="10" max="80" value="20">
             </label>
             <label>
               Ângulo
-              <input id="wmAngle" type="number" min="0" max="360" value="45" style="width:100%; padding:10px; border-radius:10px;">
+              <input id="wmAngle" type="number" min="0" max="360" value="45" style="padding:10px; border-radius:10px;">
             </label>
           </div>
-          <div style="display:grid; gap:8px; grid-template-columns: 1fr 1fr; align-items:center;">
+          <div class="watermark-row">
             <label>
               Posição
-              <select id="wmPosition" style="width:100%; padding:10px; border-radius:10px;">
+              <select id="wmPosition" style="padding:10px; border-radius:10px;">
                 <option value="diagonal">Diagonal (padrão)</option>
                 <option value="center">Centro horizontal</option>
                 <option value="repeated">Repetida</option>
@@ -442,7 +459,7 @@
               <input id="wmRepeat" type="checkbox"> Repetir
             </label>
           </div>
-          <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <div class="watermark-actions">
             <input id="watermarkFileInput" type="file" accept=".pdf" style="display:none">
             <button class="btn btn-secondary" id="wmChooseFileBtn">Selecionar PDF</button>
             <button class="btn btn-secondary" id="wmPreviewBtn">Pré-visualizar</button>
@@ -450,7 +467,7 @@
           </div>
           <div style="display:grid; gap:8px;">
             <div style="font-size:13px; color:var(--text-muted);">Pré-visualização (primeira página):</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <div class="watermark-preview-info">
               <button class="btn btn-secondary" id="wmOpenPreviewBtn">Abrir pré-visualização</button>
               <div style="color:var(--text-muted); font-size:13px;">(Abre em janela de pré-visualização maior)</div>
             </div>
