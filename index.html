@@ -91,6 +91,10 @@
     .page-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; }
     .page-card .page-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 14px; background: linear-gradient(180deg,transparent,rgba(0,0,0,0.55)); color:#fff; display:flex; align-items:center; justify-content:space-between; gap: 10px; }
     .page-card .page-info strong { font-size: 13px; }
+    #extractModal .page-card { overflow: visible; cursor: pointer; }
+    #extractModal .page-card img { width: 100%; max-width: 100%; height: auto; object-fit: contain; display: block; margin: 0 auto; aspect-ratio: auto; }
+    #extractModal .page-card .page-info { position: static; left: auto; right: auto; bottom: auto; padding: 10px 12px 0; background: transparent; color: var(--text); display: flex; justify-content: center; align-items: center; gap: 8px; }
+    #extractModal .page-card .page-info strong { color: var(--text); }
     .page-card .page-remove { width: 34px; height: 34px; border-radius: 12px; border:none; background: rgba(0,0,0,0.6); color:#fff; font-size:16px; display:flex; align-items:center; justify-content:center; }
     .page-card.dragging { opacity: 0.55; }
     .page-placeholder { min-height: 160px; border: 2px dashed var(--border); display: grid; place-items: center; border-radius: 24px; color: var(--text-muted); }
