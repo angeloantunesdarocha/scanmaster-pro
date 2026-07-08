@@ -1619,57 +1619,112 @@
       // ensure overlay sits above sheet visually (z-index handled by modal markup)
     }
 
+    function measureWatermarkText(text, fontSize, fontFamily) {
+      const tmpCanvas = document.createElement('canvas');
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.font = `bold ${fontSize}px ${fontFamily}`;
+      const metrics = tmpCtx.measureText(text);
+      return {
+        width: metrics.width,
+        height: fontSize,
+        actualHeight: (metrics.actualBoundingBoxAscent || fontSize * 0.8) + (metrics.actualBoundingBoxDescent || fontSize * 0.2)
+      };
+    }
+
+    function calculateWatermarkLayout(canvasWidth, canvasHeight, cfg) {
+      const text = (cfg.text || 'CONFIDENCIAL').trim() || 'CONFIDENCIAL';
+      const position = cfg.position || 'diagonal';
+      const repeat = position === 'repeated' || !!cfg.repeat;
+      const angleDeg = position === 'center' ? 0 : (parseFloat(cfg.angle) || 45);
+      const angle = (angleDeg % 360) * Math.PI / 180;
+      const color = cfg.color || '#E0E0E0';
+      const opacity = Math.max(0.1, Math.min(0.95, cfg.opacity || 0.2));
+      const fontFamily = cfg.font || 'Arial';
+      const minSize = repeat ? 28 : position === 'center' ? 36 : 48;
+      const maxSize = repeat ? 56 : position === 'center' ? 84 : 96;
+      let fontSize = maxSize;
+      let metrics = measureWatermarkText(text, fontSize, fontFamily);
+      const pageDiagonal = Math.sqrt(canvasWidth * canvasWidth + canvasHeight * canvasHeight);
+      const targetWidth = position === 'center'
+        ? canvasWidth * 0.85
+        : position === 'diagonal'
+          ? pageDiagonal * 0.8
+          : canvasWidth * 0.6;
+      const targetHeight = position === 'repeated'
+        ? canvasHeight * 0.18
+        : canvasHeight * 0.4;
+      while (fontSize > minSize && (metrics.width > targetWidth || metrics.actualHeight > targetHeight)) {
+        fontSize -= 2;
+        metrics = measureWatermarkText(text, fontSize, fontFamily);
+      }
+      fontSize = Math.max(minSize, fontSize);
+      const positions = [];
+      if (repeat) {
+        const spacingX = Math.max(canvasWidth / 2, metrics.width * 1.6);
+        const spacingY = Math.max(canvasHeight / 4, metrics.actualHeight * 2.2);
+        const startX = -canvasWidth / 2;
+        const endX = canvasWidth * 1.5;
+        const startY = -canvasHeight / 2;
+        const endY = canvasHeight * 1.5;
+        let rowIndex = 0;
+        for (let y = startY; y <= endY; y += spacingY) {
+          const offsetX = (rowIndex % 2) * (spacingX / 2);
+          for (let x = startX - offsetX; x <= endX; x += spacingX) {
+            positions.push({ x, y });
+          }
+          rowIndex += 1;
+        }
+      } else {
+        positions.push({ x: canvasWidth / 2, y: canvasHeight / 2 });
+      }
+      return {
+        mode: position,
+        angle,
+        fontSize,
+        opacity,
+        color,
+        text,
+        positions,
+        repeat,
+        fontFamily
+      };
+    }
+
     function overlayWatermarkOnCanvas(ctx, canvas, cfg) {
       try {
-        const text = cfg.text || 'CONFIDENCIAL';
-        const opacity = Math.max(0.1, Math.min(0.95, cfg.opacity || 0.2));
-        const angle = (cfg.angle || 45) * Math.PI / 180;
-        const fontFamily = cfg.font || 'Arial';
-        // calculate in CSS pixels (account for devicePixelRatio scaling if any)
-        const dpr = window.devicePixelRatio || 1;
-        const cssWidth = canvas.width / dpr;
-        const cssHeight = canvas.height / dpr;
+        const transform = ctx.getTransform();
+        const scaleX = transform.a || 1;
+        const scaleY = transform.d || 1;
+        const coordWidth = canvas.width / scaleX;
+        const coordHeight = canvas.height / scaleY;
+        const layout = calculateWatermarkLayout(coordWidth, coordHeight, cfg);
         ctx.save();
-        ctx.globalAlpha = opacity;
-        ctx.fillStyle = cfg.color || '#E0E0E0';
-        ctx.strokeStyle = (getLuminance(cfg.color || '#E0E0E0') > 0.6) ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)';
-        const baseSize = Math.round(Math.min(cssWidth, cssHeight) * 0.12);
+        ctx.globalAlpha = layout.opacity;
+        ctx.fillStyle = layout.color;
+        ctx.strokeStyle = getLuminance(layout.color) > 0.6 ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        if (cfg.repeat) {
-          // tiled watermark using CSS pixel coordinates
-          ctx.translate(cssWidth/2, cssHeight/2);
-          ctx.rotate(-angle);
-          const stepX = baseSize * 4;
-          const stepY = baseSize * 3;
-          for (let y = -cssHeight; y < cssHeight * 2; y += stepY) {
-            for (let x = -cssWidth; x < cssWidth * 2; x += stepX) {
-              ctx.font = `${baseSize}px ${fontFamily}`;
-              ctx.lineWidth = Math.max(1, baseSize * 0.04);
-              ctx.strokeText(text, x, y);
-              ctx.fillText(text, x, y);
-            }
+        ctx.lineWidth = Math.max(1, layout.fontSize * 0.04);
+        ctx.font = `bold ${layout.fontSize}px ${layout.fontFamily}`;
+        ctx.translate(coordWidth / 2, coordHeight / 2);
+        ctx.rotate(-layout.angle);
+        if (layout.repeat) {
+          for (const pos of layout.positions) {
+            ctx.strokeText(layout.text, pos.x, pos.y);
+            ctx.fillText(layout.text, pos.x, pos.y);
           }
-        } else if (cfg.position === 'center') {
-          ctx.translate(cssWidth/2, cssHeight/2);
-          ctx.rotate(0);
-          ctx.font = `bold ${Math.round(baseSize * 1.2)}px ${fontFamily}`;
-          ctx.lineWidth = Math.max(1, baseSize * 0.04);
-          ctx.strokeText(text, 0, 0);
-          ctx.fillText(text, 0, 0);
         } else {
-          // diagonal
-          ctx.translate(cssWidth/2, cssHeight/2);
-          ctx.rotate(-angle);
-          ctx.font = `bold ${baseSize}px ${fontFamily}`;
-          ctx.lineWidth = Math.max(1, baseSize * 0.04);
-          ctx.strokeText(text, 0, 0);
-          ctx.fillText(text, 0, 0);
+          ctx.strokeText(layout.text, 0, 0);
+          ctx.fillText(layout.text, 0, 0);
         }
         ctx.restore();
       } catch (e) {
         console.warn('overlayWatermarkOnCanvas error', e);
       }
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
     }
 
     function getLuminance(hex) {
