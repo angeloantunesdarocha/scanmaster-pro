@@ -1623,6 +1623,84 @@
       // ensure overlay sits above sheet visually (z-index handled by modal markup)
     }
 
+    // --- OCR helpers ---
+    function preprocessCanvasForOcr(canvas) {
+      const ctx = canvas.getContext('2d');
+      // operate on pixel data in-place
+      let img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = img.data;
+      // convert to grayscale & compute average luminance
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        data[i] = data[i + 1] = data[i + 2] = l;
+        sum += l;
+      }
+      const avg = sum / (canvas.width * canvas.height);
+      // contrast boost
+      const contrast = 24; // mild contrast
+      const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+      for (let i = 0; i < data.length; i += 4) {
+        let v = data[i];
+        v = factor * (v - 128) + 128;
+        v = Math.max(0, Math.min(255, Math.round(v)));
+        data[i] = data[i + 1] = data[i + 2] = v;
+      }
+      // simple sharpen kernel
+      const copy = new Uint8ClampedArray(data);
+      const w = canvas.width, h = canvas.height;
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const idx = (y * w + x) * 4;
+          const center = copy[idx];
+          const top = copy[((y - 1) * w + x) * 4];
+          const bottom = copy[((y + 1) * w + x) * 4];
+          const left = copy[(y * w + (x - 1)) * 4];
+          const right = copy[(y * w + (x + 1)) * 4];
+          // sharpen: center*5 - neighbors
+          let val = center * 5 - (top + bottom + left + right);
+          val = Math.max(0, Math.min(255, Math.round(val)));
+          data[idx] = data[idx + 1] = data[idx + 2] = val;
+        }
+      }
+      // optional binarize if very low contrast
+      if (avg < 90 || avg > 240) {
+        // do nothing extreme
+      } else {
+        // adaptive-ish threshold
+        const threshold = Math.round(avg * 0.95);
+        for (let i = 0; i < data.length; i += 4) {
+          const v = data[i] < threshold ? 0 : data[i];
+          data[i] = data[i + 1] = data[i + 2] = v;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    }
+
+    function cleanOcrText(raw) {
+      if (!raw) return '';
+      let t = raw;
+      // remove control chars except line breaks and tabs
+      t = t.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/g, '');
+      // normalize different dash/hyphen chars
+      t = t.replace(/[\u2012\u2013\u2014\u2015]/g, '-');
+      // remove weird symbols but keep common punctuation and letters (including accents)
+      t = t.replace(/[^\w\d\s\-–—.,:;()\[\]"'¿?¡!%°À-ÿ\n\r]/g, '');
+      // join words split by hyphen at line breaks
+      t = t.replace(/-\s*\n\s*/g, '');
+      // collapse multiple spaces
+      t = t.replace(/[ \t]{2,}/g, ' ');
+      // remove trailing spaces at line ends
+      t = t.split('\n').map(l => l.replace(/[ \t]+$/g, '')).join('\n');
+      // collapse multiple blank lines to max two
+      t = t.replace(/(\n\s*){3,}/g, '\n\n');
+      // ensure page separators are clearly delimited
+      t = t.replace(/---+\s*Página\s*(\d+)\s*-*/gi, '\n--- Página $1 ---\n');
+      return t.trim();
+    }
+
     function measureWatermarkText(text, fontSize, fontFamily) {
       const tmpCanvas = document.createElement('canvas');
       const tmpCtx = tmpCanvas.getContext('2d');
@@ -1800,36 +1878,75 @@
     async function ocrProcess(event) {
       const file = event.target.files[0];
       if (!file) return;
-      showLoading('Processando OCR...');
+      showLoading('Preparando imagem para OCR...');
       try {
-        let text = '';
+        let aggregated = '';
+        // create Tesseract worker
+        const worker = Tesseract.createWorker({
+          logger: m => {
+            if (m.status === 'recognizing text' && m.progress) updateProgress(m.progress);
+          }
+        });
+        await worker.load();
+        await worker.loadLanguage('por+eng');
+        await worker.initialize('por+eng');
+        // better segmentation for documents
+        await worker.setParameters({
+          tessedit_pageseg_mode: '3',
+          preserve_interword_spaces: '1'
+        });
+
         if (file.type.startsWith('image/')) {
+          showLoading('Processando imagem...');
           const imageUrl = await readFile(file);
-          const result = await Tesseract.recognize(imageUrl, 'por+eng');
-          text = result.data.text;
+          const img = new Image();
+          img.src = imageUrl;
+          await new Promise(r => img.onload = r);
+          // draw at good resolution
+          const canvas = document.createElement('canvas');
+          const maxDim = Math.max(img.width, img.height);
+          const scale = Math.min(3, Math.max(1, 2000 / maxDim));
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          preprocessCanvasForOcr(canvas);
+          showLoading('Executando OCR...');
+          const { data } = await worker.recognize(canvas);
+          aggregated += `\n--- Página 1 ---\n${data.text}\n`;
         } else {
+          // PDF: render high quality pages
           const buffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-          for (let i = 1; i <= pdf.numPages; i++) {
+          const total = pdf.numPages;
+          for (let i = 1; i <= total; i++) {
+            showLoading(`Processando página ${i} de ${total}...`);
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
+            // choose scale between 2 and 3 for better OCR
+            const scale = 2.5;
+            const viewport = page.getViewport({ scale });
             const canvas = document.createElement('canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+            canvas.width = Math.round(viewport.width);
+            canvas.height = Math.round(viewport.height);
             await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-            const imageUrl = canvas.toDataURL('image/png');
-            const result = await Tesseract.recognize(imageUrl, 'por+eng');
-            text += `\n--- Página ${i} ---\n${result.data.text}\n`;
-            updateProgress(i / pdf.numPages);
+            preprocessCanvasForOcr(canvas);
+            showLoading(`Executando OCR na página ${i}...`);
+            const { data } = await worker.recognize(canvas);
+            aggregated += `\n--- Página ${i} ---\n${data.text}\n`;
+            updateProgress(i / total);
           }
         }
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        showLoading('Limpando texto extraído...');
+        const cleaned = cleanOcrText(aggregated);
+        // finalize worker
+        await worker.terminate();
+        const blob = new Blob([cleaned], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = 'texto_extraido.txt';
         link.click();
-        showToast('OCR concluído');
+        showToast('Arquivo TXT gerado com sucesso.');
       } catch (error) {
         showToast('Erro no OCR: ' + error.message, true);
       } finally {
