@@ -157,6 +157,35 @@
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); }
     .modal-title { font-size: 18px; margin: 0; }
     .modal-close { width: 46px; height: 46px; border-radius: 16px; background: var(--surface-strong); display: grid; place-items: center; color: var(--text); }
+    #convertPreviewModal .modal-card { width: min(920px, calc(100vw - 24px)); height: min(90vh, 900px); max-height: 90vh; overflow: hidden; grid-template-rows: auto minmax(0, 1fr) auto; }
+    #convertPreviewModal .modal-header { position: relative; z-index: 2; background: var(--surface); }
+    #convertPreviewBody { min-width: 0; padding: 16px; overflow: auto; overscroll-behavior: contain; }
+    #convertPreviewContent { width: 100%; min-width: 0; transform-origin: top left; }
+    #convertPreviewContent iframe { display: block; width: 100%; min-width: 320px; height: 100%; min-height: 60vh; border: 0; background: #fff; }
+    #convertPreviewContent .word-source-preview { width: min(100%, 794px); min-height: 600px; margin: 0 auto; padding: 40px; background: #fff; color: #111; box-shadow: 0 8px 28px rgba(0,0,0,0.12); line-height: 1.5; overflow-wrap: anywhere; }
+    #convertPreviewContent .word-source-preview img { max-width: 100%; height: auto; }
+    .word-file-list { display: grid; gap: 16px; }
+    .word-file-item { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface-strong); }
+    .word-file-heading { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+    .word-file-heading div { min-width: 0; flex: 1; }
+    .word-file-heading strong, .word-file-heading small { display: block; overflow-wrap: anywhere; }
+    .word-file-heading small { color: var(--text-muted); margin-top: 4px; }
+    .word-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .word-file-actions button { min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .word-file-error { padding: 12px; border-radius: 12px; background: rgba(211,47,47,0.1); color: var(--danger); }
+    .word-image-preview { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; margin: 0 auto; object-fit: contain; }
+    #convertPreviewFooter { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); background: var(--surface); z-index: 2; }
+    #convertPreviewFooter .zoom-control { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+    #convertPreviewFooter .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    @media (max-width: 620px) {
+      #convertPreviewModal { padding: 6px; }
+      #convertPreviewModal .modal-card { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); border-radius: 20px; }
+      #convertPreviewBody { padding: 10px; }
+      #convertPreviewContent .word-source-preview { min-height: 480px; padding: 20px; }
+      #convertPreviewFooter { flex-wrap: wrap; padding: 10px; }
+      #convertPreviewFooter .zoom-control { width: 100%; }
+      #convertPreviewFooter .btn { width: auto; flex: 1; min-width: 0; padding: 12px 10px; }
+    }
     .toast { position: fixed; left: 50%; top: 22px; transform: translateX(-50%) translateY(-120%); padding: 14px 20px; border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); z-index: 140; opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     .loading { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,8,20,0.70); z-index: 130; }
@@ -342,9 +371,8 @@
           </div>
           <div class="settings-card">
             <h3>Sobre</h3>
-            <p>O ScanMaster Pro é um scanner moderno desenvolvido para digitalizar documentos com rapidez, qualidade e praticidade, oferecendo uma experiência simples e eficiente diretamente no navegador.</p>
-            <p>Desenvolvedor: Ângelo Antunes</p>
-            <p style="color: var(--text-muted);">Versão 1.0 · Design inspirado em apps Android profissionais.</p>
+            <p>ScanMaster-Pró. Scanner desenvolvido para digitalizar documentos com rapidez, qualidade e praticidade, oferecendo uma experiência simples e eficiente.</p>
+            <p style="color: var(--primary); font-weight: 700; margin-top: 8px;">Desenvolvedor: Ângelo Antunes da Rocha</p>
           </div>
         </div>
       </section>
@@ -517,7 +545,7 @@
     </div>
       
             <div class="modal" id="convertPreviewModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="convertPreviewModalTitle">
-              <div class="modal-card" style="max-width:920px;">
+              <div class="modal-card">
                 <div class="modal-header">
                   <div>
                     <p class="modal-title" id="convertPreviewModalTitle">Pré-visualização de Conversão</p>
@@ -525,20 +553,18 @@
                   </div>
                   <button class="modal-close" id="closeConvertPreviewBtn" aria-label="Fechar">✕</button>
                 </div>
-                <div class="modal-body" style="padding:16px; overflow-y:auto; max-height:calc(90vh - 120px);">
-                  <div id="convertPreviewToolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-                    <button class="btn btn-secondary" id="convertDownloadBtn">Baixar</button>
-                    <button class="btn btn-secondary" id="convertReconvertBtn">Converter novamente</button>
-                    <div style="flex:1"></div>
-                    <label style="color:var(--text-muted);margin-right:8px;">Zoom</label>
-                    <input type="range" id="convertZoom" min="0.5" max="2" step="0.1" value="1" style="width:120px;">
-                  </div>
+                <div class="modal-body" id="convertPreviewBody">
                   <div id="convertPreviewContent" style="width:100%; display:grid; gap:12px;"> </div>
+                </div>
+                <div id="convertPreviewFooter">
+                  <label class="zoom-control">Zoom <input type="range" id="convertZoom" min="0.5" max="2" step="0.1" value="1"></label>
+                  <button class="btn btn-secondary" id="convertReconvertBtn">Converter novamente</button>
+                  <button class="btn btn-secondary" id="clearWordFilesBtn" hidden>Limpar arquivos</button>
+                  <button class="btn btn-primary" id="convertActionBtn">Converter</button>
+                  <button class="btn btn-secondary" id="convertDownloadBtn" disabled>Baixar</button>
                 </div>
               </div>
             </div>
-
-            <div id="convertHtmlContainer" style="position:fixed;left:-9999px;top:-9999px;width:800px;opacity:0;pointer-events:none;z-index:-1;"></div>
 
   <div class="loading" id="loading">
     <div class="loading-card">
@@ -549,14 +575,14 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <input type="file" id="fileInput" accept=".txt,.doc,.jpg,.jpeg,.png,image/jpeg,image/png,text/plain,application/msword" multiple hidden>
+  <input type="file" id="fileInput" accept=".txt,.doc,.docx,.jpg,.jpeg,.png,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple hidden>
   <input type="file" id="mergeInput" accept=".pdf" multiple hidden>
   <input type="file" id="compressInput" accept=".pdf" hidden>
   <input type="file" id="extractInput" accept=".pdf" hidden>
   <input type="file" id="rotateInput" accept=".pdf" hidden>
   <input type="file" id="watermarkInput" accept=".pdf" hidden>
   <input type="file" id="ocrInput" accept=".pdf,image/*" hidden>
-  <input type="file" id="wordToPdfInput" accept=".txt,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden>
+  <input type="file" id="wordToPdfInput" accept=".txt,.doc,.docx,.jpg,.jpeg,.png,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple hidden>
   <input type="file" id="pdfToWordInput" accept=".pdf" hidden>
   <input type="file" id="toJpgInput" accept=".pdf" hidden>
   <input type="file" id="toPdfInput" accept="image/*" multiple hidden>
@@ -574,6 +600,7 @@
       generatedPdfName: '',
       importedFiles: [],
       extractData: { pages: [], selected: [] },
+      pendingWordConversion: { items: [], processing: false },
       settings: {
         theme: 'light',
         quality: 0.95,
@@ -788,17 +815,19 @@
           a.click();
         } else showToast('Nenhum arquivo para download', true);
       });
+      document.getElementById('convertActionBtn').addEventListener('click', convertPendingWordToPdf);
+      document.getElementById('clearWordFilesBtn').addEventListener('click', clearWordFiles);
+      document.getElementById('convertPreviewContent').addEventListener('click', handleWordFileListAction);
       const reconvertBtn = document.getElementById('convertReconvertBtn');
       if (reconvertBtn) reconvertBtn.addEventListener('click', () => {
-        if (!state.lastConversion) return;
-        if (state.lastConversion.type === 'pdf') document.getElementById('wordToPdfInput').click();
-        else if (state.lastConversion.type === 'docx') document.getElementById('pdfToWordInput').click();
+        if (state.pendingWordConversion.items.length || state.lastConversion?.type === 'pdf') document.getElementById('wordToPdfInput').click();
+        else if (state.lastConversion?.type === 'docx') document.getElementById('pdfToWordInput').click();
       });
       const zoomRange = document.getElementById('convertZoom');
       if (zoomRange) zoomRange.addEventListener('input', (e) => {
         const v = parseFloat(e.target.value);
         const content = document.getElementById('convertPreviewContent');
-        if (content) content.style.transform = `scale(${v})`;
+        if (content) content.style.zoom = v;
       });
       document.getElementById('wmOpacity').addEventListener('input', event => {
         document.getElementById('wmOpacityLabel').textContent = event.target.value + '%';
@@ -958,7 +987,24 @@
             renderPages();
             updateInfoCards();
           };
+          reader.onerror = () => showToast(`Não foi possível ler ${file.name}.`, true);
           reader.readAsText(file, 'UTF-8');
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || name.endsWith('.docx')) {
+          const reader = new FileReader();
+          reader.onload = async event => {
+            try {
+              const result = await mammoth.extractRawText({ arrayBuffer: event.target.result });
+              const dataUrl = createTextPageDataUrl(result.value || '');
+              state.pages.push({ id: Date.now() + Math.random(), dataUrl, rotation: 0, filter: 'none', textSource: true });
+              renderPages();
+              updateInfoCards();
+            } catch (error) {
+              console.error('Falha ao processar DOCX:', error);
+              showToast(`Não foi possível processar ${file.name}.`, true);
+            }
+          };
+          reader.onerror = () => showToast(`Não foi possível ler ${file.name}.`, true);
+          reader.readAsArrayBuffer(file);
         } else if (file.type.startsWith('image/') || /\.(jpe?g|png)$/i.test(name)) {
           const reader = new FileReader();
           reader.onload = event => {
@@ -968,12 +1014,9 @@
           };
           reader.readAsDataURL(file);
         } else if (file.type === 'application/msword' || /\.doc$/.test(name)) {
-          // Limitação técnica: este app não tem leitor binário de .doc.
-          // Apenas aceitamos o upload (atributo accept + validação por extensão) e
-          // informamos o usuário. Nenhuma conversão silenciosa é realizada.
-          showToast('Arquivo .doc aceito. Observação: a leitura interna do conteúdo .doc não é suportada neste app — apenas o upload é registrado.', true);
+          showToast('O formato .doc antigo não pode ser processado diretamente no navegador. Converta para .docx e tente novamente.', true);
         } else {
-          showToast('Formato não suportado. Use TXT, DOC, JPG, JPEG ou PNG.', true);
+          showToast('Formato não suportado. Use TXT, DOCX, DOC, JPG, JPEG ou PNG.', true);
         }
       });
       document.getElementById('fileInput').value = '';
@@ -981,83 +1024,218 @@
 
     async function handleWordToPdfFile(files) {
       if (!files.length) return;
-      const file = files[0];
-      showLoading('Convertendo Word → PDF...');
-      updateProgress(0.05);
-      try {
-        const nameBase = (file.name || 'documento').replace(/\.(txt|docx?|DOCX?)$/, '');
-        const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: pageSizes[state.settings.pageSize] });
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 40;
-        const fontSize = 12;
-        const lineHeight = fontSize * 1.4;
-        const container = document.getElementById('convertHtmlContainer');
-        container.innerHTML = '';
-        container.style.width = `${pageWidth - margin * 2}px`;
-        container.style.fontFamily = 'Inter, system-ui, sans-serif';
-        container.style.color = '#111';
-        container.style.fontSize = `${fontSize}px`;
-        container.style.lineHeight = '1.4';
-        container.style.padding = `${margin}px`;
-        container.style.boxSizing = 'border-box';
-        container.style.whiteSpace = 'pre-wrap';
-        container.style.wordWrap = 'break-word';
-        container.style.background = '#fff';
-        if (isTxt) {
-          const text = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = event => resolve(event.target.result);
-            reader.onerror = () => reject(new Error('Não foi possível ler o arquivo TXT.'));
-            reader.readAsText(file, 'UTF-8');
-          });
-          if (!text || !text.trim()) {
-            hideLoading();
-            showToast('O arquivo selecionado não contém texto.', true);
-            return;
+      const selected = Array.from(files);
+      for (const file of selected) {
+        const item = { id: Date.now() + Math.random(), file, name: file.name, type: '', html: '', dataUrl: '', error: '' };
+        const lowerName = file.name.toLowerCase();
+        try {
+          if (file.type === 'text/plain' || lowerName.endsWith('.txt')) {
+            item.type = 'TXT';
+            const text = await file.text();
+            if (!text.trim()) throw new Error('O arquivo não contém texto.');
+            item.html = `<div style="white-space:pre-wrap">${escapeHtml(text)}</div>`;
+          } else if (lowerName.endsWith('.docx')) {
+            item.type = 'DOCX';
+            const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+            item.html = result.value || '';
+            if (!item.html.trim()) throw new Error('O documento não contém conteúdo renderizável.');
+          } else if (lowerName.endsWith('.doc')) {
+            item.type = 'DOC';
+            item.error = 'O formato .doc antigo não pode ser processado diretamente no navegador. Converta este arquivo para .docx e tente novamente.';
+          } else if (file.type.startsWith('image/') || /\.(jpe?g|png)$/.test(lowerName)) {
+            item.type = lowerName.endsWith('.png') ? 'PNG' : 'JPG';
+            item.dataUrl = await readFile(file);
+          } else {
+            item.type = file.type || 'desconhecido';
+            item.error = 'Formato não suportado.';
           }
-          container.textContent = text;
-        } else if (file.name.toLowerCase().endsWith('.docx')) {
-          const arrayBuffer = await file.arrayBuffer();
-          updateProgress(0.2);
-          const result = await mammoth.convertToHtml({ arrayBuffer });
-          const html = result.value || '<div></div>';
-          container.innerHTML = `<div style="font-family: Inter, system-ui, sans-serif; color: #111; white-space: pre-wrap; word-wrap: break-word;">${html}</div>`;
-        } else if (file.name.toLowerCase().endsWith('.doc')) {
-          hideLoading();
-          showToast('A conversão de .doc não é suportada no navegador. Use .docx.', true);
-          return;
-        } else {
-          hideLoading();
-          showToast('Formato não suportado para conversão. Use TXT ou DOCX.', true);
-          return;
+        } catch (e) {
+          item.error = e && e.message ? e.message : 'Não foi possível processar o arquivo.';
+          console.error(`Falha em ${file.name}:`, e);
         }
-        updateProgress(0.4);
-        await new Promise((resolve, reject) => {
+        state.pendingWordConversion.items.push(item);
+        if (item.error) showToast(`${file.name}: ${item.error}`, true);
+      }
+      document.getElementById('wordToPdfInput').value = '';
+      state.lastConversion = null;
+      renderWordFileList();
+      openModal('convertPreviewModal');
+    }
+
+    function renderWordFileList() {
+      const items = state.pendingWordConversion.items;
+      const content = document.getElementById('convertPreviewContent');
+      content.innerHTML = `<div class="word-file-list">${items.map((item, index) => `
+        <section class="word-file-item" data-word-id="${item.id}">
+          <div class="word-file-heading"><strong>${index + 1}</strong><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.type)}</small></div></div>
+          ${item.error ? `<div class="word-file-error">${escapeHtml(item.error)}</div>` : item.dataUrl ? `<img class="word-image-preview" src="${item.dataUrl}" alt="Prévia de ${escapeHtml(item.name)}">` : `<article class="word-source-preview">${item.html}</article>`}
+          <div class="word-file-actions">
+            <button type="button" data-word-action="up" ${index === 0 ? 'disabled' : ''}>Mover para cima</button>
+            <button type="button" data-word-action="down" ${index === items.length - 1 ? 'disabled' : ''}>Mover para baixo</button>
+            <button type="button" data-word-action="remove">Remover</button>
+          </div>
+        </section>`).join('')}</div>`;
+      const validCount = items.filter(item => !item.error).length;
+      document.getElementById('convertPreviewSubtitle').textContent = `${items.length} arquivo(s), ${validCount} válido(s) — ordem de cima para baixo`;
+      document.getElementById('convertActionBtn').hidden = false;
+      document.getElementById('convertActionBtn').disabled = !validCount || state.pendingWordConversion.processing;
+      document.getElementById('convertDownloadBtn').disabled = true;
+      document.getElementById('convertReconvertBtn').hidden = false;
+      document.getElementById('convertReconvertBtn').textContent = 'Adicionar arquivos';
+      document.getElementById('clearWordFilesBtn').hidden = !items.length;
+      document.getElementById('convertZoom').value = 1;
+      content.style.zoom = 1;
+    }
+
+    function handleWordFileListAction(event) {
+      const button = event.target.closest('[data-word-action]');
+      if (!button || state.pendingWordConversion.processing) return;
+      const card = button.closest('[data-word-id]');
+      const index = state.pendingWordConversion.items.findIndex(item => String(item.id) === card.dataset.wordId);
+      if (index < 0) return;
+      const action = button.dataset.wordAction;
+      if (action === 'remove') state.pendingWordConversion.items.splice(index, 1);
+      if (action === 'up' && index > 0) [state.pendingWordConversion.items[index - 1], state.pendingWordConversion.items[index]] = [state.pendingWordConversion.items[index], state.pendingWordConversion.items[index - 1]];
+      if (action === 'down' && index < state.pendingWordConversion.items.length - 1) [state.pendingWordConversion.items[index + 1], state.pendingWordConversion.items[index]] = [state.pendingWordConversion.items[index], state.pendingWordConversion.items[index + 1]];
+      state.lastConversion = null;
+      renderWordFileList();
+    }
+
+    function clearWordFiles() {
+      if (state.pendingWordConversion.processing) return;
+      state.pendingWordConversion.items = [];
+      state.lastConversion = null;
+      renderWordFileList();
+    }
+
+    async function waitForWordRender(container) {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const images = Array.from(container.querySelectorAll('img'));
+      await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise((resolve, reject) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', () => reject(new Error('Uma imagem interna do documento não pôde ser carregada.')), { once: true });
+      })));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+
+    function canvasHasVisibleContent(canvas) {
+      const sample = document.createElement('canvas');
+      sample.width = Math.min(160, canvas.width);
+      sample.height = Math.min(240, canvas.height);
+      const ctx = sample.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(canvas, 0, 0, sample.width, sample.height);
+      const pixels = ctx.getImageData(0, 0, sample.width, sample.height).data;
+      for (let y = 0; y < sample.height; y++) {
+        for (let x = 0; x < sample.width; x++) {
+          const offset = (y * sample.width + x) * 4;
+          if (pixels[offset + 3] > 0 && (pixels[offset] < 245 || pixels[offset + 1] < 245 || pixels[offset + 2] < 245)) return true;
+        }
+      }
+      return false;
+    }
+
+    function findWordPageBreak(ctx, idealY, minY) {
+      const start = Math.max(minY, idealY - 80);
+      for (let y = idealY; y >= start; y--) {
+        const row = ctx.getImageData(0, y, ctx.canvas.width, 1).data;
+        let hasInk = false;
+        for (let x = 0; x < row.length; x += 16) {
+          if (row[x + 3] > 0 && (row[x] < 245 || row[x + 1] < 245 || row[x + 2] < 245)) { hasInk = true; break; }
+        }
+        if (!hasInk) return y;
+      }
+      return idealY;
+    }
+
+    async function renderWordHtmlToCanvases(item, pdf) {
+      const container = document.createElement('div');
+      container.style.cssText = 'position:absolute;left:-10000px;top:0;display:block;visibility:visible;opacity:1;width:794px;height:auto;padding:40px;box-sizing:border-box;background:#fff;color:#111;font:16px/1.5 Arial,sans-serif;white-space:normal;overflow-wrap:anywhere;transform:none;';
+      container.innerHTML = item.html;
+      if (item.type === 'TXT') container.style.whiteSpace = 'pre-wrap';
+      container.querySelectorAll('img').forEach(img => { img.style.maxWidth = '100%'; img.style.height = 'auto'; });
+      document.body.appendChild(container);
+      try {
+        await waitForWordRender(container);
+        const source = await html2canvas(container, { scale: 1.5, backgroundColor: '#ffffff', useCORS: true, logging: false, windowWidth: 794 });
+        if (!source.width || !source.height || !canvasHasVisibleContent(source)) throw new Error('A renderização resultou em uma página vazia.');
+        const pageRatio = pdf.internal.pageSize.getHeight() / pdf.internal.pageSize.getWidth();
+        const idealHeight = Math.max(1, Math.floor(source.width * pageRatio));
+        const pages = [];
+        let sourceY = 0;
+        const sourceCtx = source.getContext('2d', { willReadFrequently: true });
+        while (sourceY < source.height) {
+          const idealEnd = Math.min(source.height, sourceY + idealHeight);
+          const endY = idealEnd < source.height ? findWordPageBreak(sourceCtx, idealEnd, sourceY + Math.floor(idealHeight * 0.65)) : idealEnd;
+          const height = Math.max(1, endY - sourceY);
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = source.width;
+          pageCanvas.height = height;
+          pageCanvas.getContext('2d').drawImage(source, 0, sourceY, source.width, height, 0, 0, source.width, height);
+          if (canvasHasVisibleContent(pageCanvas)) pages.push(pageCanvas);
+          sourceY = endY;
+        }
+        if (!pages.length) throw new Error('Nenhuma página com conteúdo foi gerada.');
+        return pages;
+      } finally {
+        container.remove();
+      }
+    }
+
+    async function convertPendingWordToPdf() {
+      const validItems = state.pendingWordConversion.items.filter(item => !item.error);
+      if (!validItems.length || state.pendingWordConversion.processing) return showToast('Adicione pelo menos um arquivo válido antes de converter.', true);
+      state.pendingWordConversion.processing = true;
+      document.getElementById('convertActionBtn').disabled = true;
+      showLoading('Convertendo Word → PDF...');
+      try {
+        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: pageSizes[state.settings.pageSize] });
+        let converted = 0;
+        let hasPdfPage = false;
+        for (const item of validItems) {
           try {
-            pdf.html(container, {
-              callback: function (doc) { resolve(doc); },
-              x: margin,
-              y: margin,
-              html2canvas: { scale: 2 }
-            });
+            if (item.dataUrl) {
+              if (hasPdfPage) pdf.addPage();
+              const props = pdf.getImageProperties(item.dataUrl);
+              const pageWidth = pdf.internal.pageSize.getWidth();
+              const pageHeight = pdf.internal.pageSize.getHeight();
+              const ratio = Math.min((pageWidth - 40) / props.width, (pageHeight - 40) / props.height);
+              pdf.addImage(item.dataUrl, item.type === 'PNG' ? 'PNG' : 'JPEG', (pageWidth - props.width * ratio) / 2, (pageHeight - props.height * ratio) / 2, props.width * ratio, props.height * ratio, undefined, 'FAST');
+              hasPdfPage = true;
+            } else {
+              const pages = await renderWordHtmlToCanvases(item, pdf);
+              for (const pageCanvas of pages) {
+                if (hasPdfPage) pdf.addPage();
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const ratio = Math.min(pageWidth / pageCanvas.width, pageHeight / pageCanvas.height);
+                pdf.addImage(pageCanvas, 'PNG', 0, 0, pageCanvas.width * ratio, pageCanvas.height * ratio, undefined, 'FAST');
+                hasPdfPage = true;
+              }
+            }
+            converted++;
           } catch (e) {
-            reject(e);
+            item.error = e && e.message ? e.message : 'Falha durante a conversão.';
+            showToast(`${item.name}: ${item.error}`, true);
           }
-        });
-        updateProgress(0.85);
+          updateProgress((validItems.indexOf(item) + 1) / validItems.length);
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        if (!converted) throw new Error('Nenhum arquivo pôde ser convertido.');
         const blob = pdf.output('blob');
         const url = URL.createObjectURL(blob);
-        state.lastConversion = { type: 'pdf', blob, url, name: `${nameBase}.pdf` };
+        if (state.lastConversion?.url) URL.revokeObjectURL(state.lastConversion.url);
+        const name = state.pendingWordConversion.items.length === 1 ? state.pendingWordConversion.items[0].name.replace(/\.[^.]+$/, '') + '.pdf' : 'documentos-combinados.pdf';
+        state.lastConversion = { type: 'pdf', blob, url, name };
         hideLoading();
         openConvertPreview('pdf');
       } catch (e) {
         hideLoading();
         console.error('Word→PDF error', e);
         showToast('Erro na conversão: ' + (e && e.message ? e.message : e), true);
+      } finally {
+        state.pendingWordConversion.processing = false;
+        document.getElementById('convertActionBtn').disabled = !state.pendingWordConversion.items.some(item => !item.error);
       }
-      document.getElementById('wordToPdfInput').value = '';
     }
 
     async function handlePdfToWordFile(files) {
@@ -2026,7 +2204,12 @@
         content.textContent = 'Tipo de arquivo não corresponde ao preview.';
       }
       document.getElementById('convertZoom').value = 1;
-      document.getElementById('convertPreviewContent').style.transform = 'scale(1)';
+      document.getElementById('convertPreviewContent').style.zoom = 1;
+      document.getElementById('convertActionBtn').hidden = true;
+      document.getElementById('convertDownloadBtn').disabled = false;
+      document.getElementById('convertReconvertBtn').hidden = false;
+      document.getElementById('convertReconvertBtn').textContent = kind === 'pdf' && state.pendingWordConversion.items.length ? 'Adicionar arquivos' : 'Converter novamente';
+      document.getElementById('clearWordFilesBtn').hidden = !(kind === 'pdf' && state.pendingWordConversion.items.length);
       openModal(modalId);
     }
 
