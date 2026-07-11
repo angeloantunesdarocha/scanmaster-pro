@@ -549,7 +549,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <input type="file" id="fileInput" accept=".txt,.jpg,.jpeg,.png,image/jpeg,image/png,text/plain" multiple hidden>
+  <input type="file" id="fileInput" accept=".txt,.doc,.jpg,.jpeg,.png,image/jpeg,image/png,text/plain,application/msword" multiple hidden>
   <input type="file" id="mergeInput" accept=".pdf" multiple hidden>
   <input type="file" id="compressInput" accept=".pdf" hidden>
   <input type="file" id="extractInput" accept=".pdf" hidden>
@@ -948,7 +948,8 @@
     function handleImageFiles(files) {
       if (!files.length) return;
       Array.from(files).forEach(file => {
-        if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+        const name = file.name.toLowerCase();
+        if (file.type === 'text/plain' || name.endsWith('.txt')) {
           const reader = new FileReader();
           reader.onload = event => {
             const text = event.target.result || '';
@@ -958,7 +959,7 @@
             updateInfoCards();
           };
           reader.readAsText(file, 'UTF-8');
-        } else if (file.type.startsWith('image/') || /\.(jpe?g|png)$/i.test(file.name)) {
+        } else if (file.type.startsWith('image/') || /\.(jpe?g|png)$/i.test(name)) {
           const reader = new FileReader();
           reader.onload = event => {
             state.pages.push({ id: Date.now() + Math.random(), dataUrl: event.target.result, rotation: 0, filter: 'none' });
@@ -966,8 +967,13 @@
             updateInfoCards();
           };
           reader.readAsDataURL(file);
+        } else if (file.type === 'application/msword' || /\.doc$/.test(name)) {
+          // Limitação técnica: este app não tem leitor binário de .doc.
+          // Apenas aceitamos o upload (atributo accept + validação por extensão) e
+          // informamos o usuário. Nenhuma conversão silenciosa é realizada.
+          showToast('Arquivo .doc aceito. Observação: a leitura interna do conteúdo .doc não é suportada neste app — apenas o upload é registrado.', true);
         } else {
-          showToast('Formato não suportado. Use TXT, JPG, JPEG ou PNG.', true);
+          showToast('Formato não suportado. Use TXT, DOC, JPG, JPEG ou PNG.', true);
         }
       });
       document.getElementById('fileInput').value = '';
