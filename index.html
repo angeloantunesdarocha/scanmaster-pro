@@ -156,12 +156,16 @@
     .scan-workflow-footer .btn { min-width: 0; flex: 1 1 140px; padding: 12px; }
     .scan-filter-label { display: flex; align-items: center; gap: 8px; flex: 1 1 210px; }
     .scan-filter-label select { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); color: var(--text); }
-    .camera-controls { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; background: var(--surface); }
-    .camera-actions { display: flex; gap: 12px; }
-    .camera-auto-control { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; }
+    .camera-controls { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 14px; padding: 18px max(20px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: var(--surface); }
+    .camera-actions { display: flex; gap: 12px; justify-self: start; }
+    .camera-auto-control { display: flex; align-items: center; justify-self: end; gap: 8px; color: var(--text); font-size: 13px; }
     .camera-auto-control input { width: 20px; height: 20px; accent-color: var(--primary); }
     .cam-action { width: 52px; height: 52px; border-radius: 18px; background: var(--surface-strong); display: grid; place-items: center; color: var(--text); box-shadow: var(--shadow); }
-    .capture-btn { width: 76px; height: 76px; border-radius: 24px; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-size: 24px; display: grid; place-items: center; box-shadow: 0 20px 46px rgba(93,49,200,0.28); }
+    .capture-btn { grid-column: 2; grid-row: 1; justify-self: center; width: 76px; height: 76px; border-radius: 24px; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-size: 24px; display: grid; place-items: center; box-shadow: 0 20px 46px rgba(93,49,200,0.28); }
+    #closeCameraBtn { min-width: 46px; min-height: 46px; background: #ff4d4d; color: #fff; box-shadow: 0 8px 22px rgba(255,77,77,0.35); margin-right: env(safe-area-inset-right); }
+    #closeCameraBtn:hover { background: #e93636; transform: scale(1.04); }
+    #closeCameraBtn:active { background: #c92828; transform: scale(0.97); }
+    #closeCameraBtn:focus-visible { outline-color: #fff; box-shadow: 0 0 0 4px rgba(255,77,77,0.45); }
     .preview-meta { padding: 18px 22px; display: grid; gap: 14px; }
     .preview-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 12px; padding: 0 22px 20px; }
     .preview-img { width: 100%; height: auto; border-radius: 24px; object-fit: contain; background: #000; }
@@ -226,7 +230,10 @@
       .hero-card { border-radius: 24px; }
       .btn { width: 100%; justify-content: center; }
       .nav-btn { max-width: none; padding: 14px 10px; }
-      .camera-controls { flex-wrap: wrap; gap: 10px; }
+      .camera-controls { grid-template-columns: minmax(72px,1fr) auto minmax(92px,1fr); gap: 8px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+      .camera-actions { gap: 6px; }
+      .cam-action { width: 46px; height: 46px; }
+      .camera-auto-control { max-width: 112px; line-height: 1.2; }
     }
     /* Watermark preview styles */
     .wm-preview-container { display:flex; justify-content:center; align-items:center; padding:12px 6px 18px; }
@@ -637,7 +644,7 @@
       facingMode: 'environment',
       hasTorch: false,
       torchOn: false,
-      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detecting: false, corners: null, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0 },
+      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0 },
       generatedPdfUrl: '',
       generatedPdfName: '',
       importedFiles: [],
@@ -667,6 +674,7 @@
 
     const pageSizeNames = { a4: 'A4', letter: 'Carta', auto: 'Automático' };
     const pageSizes = { a4: 'a4', letter: 'letter', auto: 'a4' };
+    const cameraJpegQuality = 0.96;
     let jsPDF = null;
     let lastFocusedElement = null;
     let activeModal = null;
@@ -993,7 +1001,7 @@
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: state.facingMode }, width: { ideal: 1280 }, height: { ideal: 960 } },
+          video: { facingMode: { ideal: state.facingMode }, width: { ideal: 2560 }, height: { ideal: 1920 }, frameRate: { ideal: 30, max: 30 } },
           audio: false
         });
         state.currentStream = stream;
@@ -1002,7 +1010,9 @@
         await video.play();
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities();
+        const settings = track.getSettings();
         state.hasTorch = !!(capabilities.torch);
+        console.info(`Câmera ativa em ${settings.width || video.videoWidth}×${settings.height || video.videoHeight}`);
         document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
         resizeCameraOverlay();
         if (state.cameraScan.cvReady) startDocumentDetection();
@@ -1079,6 +1089,7 @@
       stopDocumentDetection();
       state.cameraScan.timer = setInterval(detectDocumentFrame, 160);
       window.addEventListener('resize', resizeCameraOverlay);
+      window.addEventListener('orientationchange', resizeCameraOverlay);
       detectDocumentFrame();
     }
 
@@ -1089,9 +1100,62 @@
       state.cameraScan.corners = null;
       state.cameraScan.stableSince = 0;
       state.cameraScan.lastCorners = null;
+      state.cameraScan.confidence = 0;
+      state.cameraScan.consistentFrames = 0;
       window.removeEventListener('resize', resizeCameraOverlay);
+      window.removeEventListener('orientationchange', resizeCameraOverlay);
       const overlay = document.getElementById('cameraDetectionOverlay');
       if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    function scoreDocumentQuadrilateral(points, areaRatio, width, height) {
+      const ordered = orderDocumentCorners(points);
+      const sides = ordered.map((point, index) => pointDistance(point, ordered[(index + 1) % 4]));
+      const documentRatio = Math.max(sides[0], sides[2]) / Math.max(1, Math.max(sides[1], sides[3]));
+      if (documentRatio < 0.18 || documentRatio > 5.5) return 0;
+      const angleScores = ordered.map((point, index) => {
+        const previous = ordered[(index + 3) % 4]; const next = ordered[(index + 1) % 4];
+        const ax = previous.x - point.x; const ay = previous.y - point.y; const bx = next.x - point.x; const by = next.y - point.y;
+        const cosine = Math.abs((ax * bx + ay * by) / Math.max(1, Math.hypot(ax, ay) * Math.hypot(bx, by)));
+        return Math.max(0, 1 - cosine / 0.55);
+      });
+      if (Math.min(...angleScores) < 0.12) return 0;
+      const areaScore = Math.max(0, Math.min(1, (areaRatio - 0.08) / 0.72));
+      const ratioScore = documentRatio >= 0.35 && documentRatio <= 3.2 ? 1 : 0.55;
+      const margin = Math.min(...ordered.flatMap(point => [point.x, point.y, width - point.x, height - point.y]));
+      const borderScore = margin > Math.min(width, height) * 0.015 ? 1 : 0.55;
+      return areaScore * 0.46 + (angleScores.reduce((sum, value) => sum + value, 0) / 4) * 0.34 + ratioScore * 0.12 + borderScore * 0.08;
+    }
+
+    function findBestDocumentCandidate(contours, width, height, scale) {
+      let best = null; let bestScore = 0;
+      const candidates = [];
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        candidates.push({ index: i, area: Math.abs(cv.contourArea(contour)) });
+        contour.delete();
+      }
+      candidates.sort((a, b) => b.area - a.area);
+      for (const candidate of candidates.slice(0, 12)) {
+        const contour = contours.get(candidate.index);
+        try {
+          if (candidate.area < width * height * 0.07) continue;
+          const perimeter = cv.arcLength(contour, true);
+          for (const epsilon of [0.022, 0.035, 0.05]) {
+            const approx = new cv.Mat();
+            try {
+              cv.approxPolyDP(contour, approx, perimeter * epsilon, true);
+              if (approx.rows !== 4 || !cv.isContourConvex(approx)) continue;
+              const areaRatio = Math.abs(cv.contourArea(approx)) / (width * height);
+              if (areaRatio < 0.1 || areaRatio > 0.94) continue;
+              const analysisPoints = Array.from({ length: 4 }, (_, index) => ({ x: approx.data32S[index * 2], y: approx.data32S[index * 2 + 1] }));
+              const score = scoreDocumentQuadrilateral(analysisPoints, areaRatio, width, height);
+              if (score > bestScore) { bestScore = score; best = analysisPoints.map(point => ({ x: point.x / scale, y: point.y / scale })); }
+            } finally { approx.delete(); }
+          }
+        } finally { contour.delete(); }
+      }
+      return { points: best, confidence: bestScore };
     }
 
     function detectDocumentFrame() {
@@ -1113,20 +1177,14 @@
         kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
         cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
         cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-        let best = null; let bestArea = analysis.width * analysis.height * 0.15;
-        for (let i = 0; i < contours.size(); i++) {
-          const contour = contours.get(i); const perimeter = cv.arcLength(contour, true); const approx = new cv.Mat();
-          cv.approxPolyDP(contour, approx, perimeter * 0.04, true);
-          const area = Math.abs(cv.contourArea(approx));
-          if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestArea && area < analysis.width * analysis.height * 0.98) {
-            bestArea = area;
-            best = Array.from({ length: 4 }, (_, index) => ({ x: approx.data32S[index * 2] / scale, y: approx.data32S[index * 2 + 1] / scale }));
-          }
-          approx.delete(); contour.delete();
-        }
-        state.cameraScan.corners = best ? smoothDocumentCorners(orderDocumentCorners(best)) : null;
+        const candidate = findBestDocumentCandidate(contours, analysis.width, analysis.height, scale);
+        const confident = candidate.points && candidate.confidence >= 0.58;
+        state.cameraScan.consistentFrames = confident ? state.cameraScan.consistentFrames + 1 : Math.max(0, state.cameraScan.consistentFrames - 1);
+        state.cameraScan.confidence = candidate.confidence;
+        state.cameraScan.corners = confident ? smoothDocumentCorners(orderDocumentCorners(candidate.points)) : null;
         updateAutoCaptureStability(state.cameraScan.corners);
-        updateCameraDetectionStatus(best ? 'Documento detectado' : 'Posicione o documento dentro da câmera', !!best);
+        const confirmed = confident && state.cameraScan.consistentFrames >= 3;
+        updateCameraDetectionStatus(confirmed ? 'Documento detectado' : candidate.points ? 'Ajuste o enquadramento' : 'Aproxime o documento', confirmed);
         resizeCameraOverlay();
       } catch (error) {
         console.warn('Falha na detecção do documento:', error);
@@ -1194,6 +1252,8 @@
       state.cameraScan.processing = true;
       state.cameraScan.cooldownUntil = performance.now() + 3000;
       document.getElementById('captureBtn').disabled = true;
+      showLoading('Corrigindo perspectiva…');
+      await new Promise(resolve => requestAnimationFrame(resolve));
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -1201,7 +1261,7 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
         const detected = !!state.cameraScan.corners;
-        const corners = detected ? state.cameraScan.corners.map(point => ({ ...point })) : [
+        const corners = detected ? expandDocumentCorners(state.cameraScan.corners, canvas.width, canvas.height) : [
           { x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }
         ];
         stopDocumentDetection();
@@ -1216,6 +1276,7 @@
         openCapturedDocumentAdjust();
         showToast('Não foi possível corrigir automaticamente. Use o ajuste manual.', true);
       } finally {
+        hideLoading();
         state.cameraScan.processing = false;
         document.getElementById('captureBtn').disabled = false;
       }
@@ -1231,6 +1292,14 @@
 
     function pointDistance(a, b) {
       return Math.hypot(b.x - a.x, b.y - a.y);
+    }
+
+    function expandDocumentCorners(corners, width, height) {
+      const center = corners.reduce((result, point) => ({ x: result.x + point.x / 4, y: result.y + point.y / 4 }), { x: 0, y: 0 });
+      return corners.map(point => ({
+        x: Math.max(0, Math.min(width, center.x + (point.x - center.x) * 1.012)),
+        y: Math.max(0, Math.min(height, center.y + (point.y - center.y) * 1.012))
+      }));
     }
 
     function applyDocumentPerspective(sourceCanvas, corners) {
@@ -1330,14 +1399,8 @@
       try {
         src = cv.imread(analysis); gray = new cv.Mat(); edges = new cv.Mat(); contours = new cv.MatVector(); hierarchy = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.equalizeHist(gray, gray); cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0); cv.Canny(gray, edges, 30, 110); kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5)); cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel); cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-        let best = null; let bestArea = analysis.width * analysis.height * 0.1;
-        for (let i = 0; i < contours.size(); i++) {
-          const contour = contours.get(i); const approx = new cv.Mat(); cv.approxPolyDP(contour, approx, cv.arcLength(contour, true) * 0.04, true);
-          const area = Math.abs(cv.contourArea(approx));
-          if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestArea) { bestArea = area; best = Array.from({ length: 4 }, (_, n) => ({ x: approx.data32S[n * 2] / scale, y: approx.data32S[n * 2 + 1] / scale })); }
-          approx.delete(); contour.delete();
-        }
-        return best ? orderDocumentCorners(best) : null;
+        const candidate = findBestDocumentCandidate(contours, analysis.width, analysis.height, scale);
+        return candidate.confidence >= 0.52 && candidate.points ? orderDocumentCorners(candidate.points) : null;
       } finally { [src, gray, edges, contours, hierarchy, kernel].forEach(mat => { if (mat?.delete) mat.delete(); }); }
     }
 
@@ -1372,10 +1435,19 @@
 
     function createFilteredDocumentCanvas(source, mode) {
       if (mode === 'original') return cloneCanvas(source);
-      if (mode === 'document' && state.cameraScan.cvReady) {
-        let src, gray, output;
-        try { src = cv.imread(source); gray = new cv.Mat(); output = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.adaptiveThreshold(gray, output, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 25, 12); const canvas = document.createElement('canvas'); cv.imshow(canvas, output); return canvas; }
-        finally { [src, gray, output].forEach(mat => { if (mat?.delete) mat.delete(); }); }
+      if (state.cameraScan.cvReady) {
+        let src, gray, adjusted, blurred, output;
+        try {
+          src = cv.imread(source); output = new cv.Mat();
+          if (mode === 'document') {
+            gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.adaptiveThreshold(gray, output, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 35, 11);
+          } else if (mode === 'grayscale') {
+            cv.cvtColor(src, output, cv.COLOR_RGBA2GRAY);
+          } else {
+            adjusted = new cv.Mat(); blurred = new cv.Mat(); src.convertTo(adjusted, -1, 1.06, 6); cv.GaussianBlur(adjusted, blurred, new cv.Size(0, 0), 1.1); cv.addWeighted(adjusted, 1.16, blurred, -0.16, 0, output);
+          }
+          const canvas = document.createElement('canvas'); cv.imshow(canvas, output); return canvas;
+        } finally { [src, gray, adjusted, blurred, output].forEach(mat => { if (mat?.delete) mat.delete(); }); }
       }
       const canvas = cloneCanvas(source); const ctx = canvas.getContext('2d'); const image = ctx.getImageData(0, 0, canvas.width, canvas.height); const data = image.data;
       for (let i = 0; i < data.length; i += 4) {
@@ -1397,15 +1469,17 @@
       const pending = state.cameraScan.pending;
       if (!pending) return;
       try {
-        pending.filtered = createFilteredDocumentCanvas(pending.corrected, document.getElementById('scanFilterSelect').value);
-        document.getElementById('scanPagePreviewImg').src = pending.filtered.toDataURL('image/jpeg', state.settings.quality);
+        const filter = document.getElementById('scanFilterSelect').value;
+        pending.filtered = createFilteredDocumentCanvas(pending.corrected, filter);
+        pending.finalDataUrl = pending.filtered.toDataURL(filter === 'document' ? 'image/png' : 'image/jpeg', cameraJpegQuality);
+        document.getElementById('scanPagePreviewImg').src = pending.finalDataUrl;
       } catch (error) { showToast('Falha ao aplicar filtro: ' + error.message, true); }
     }
 
     function addCapturedDocumentPage() {
       const pending = state.cameraScan.pending;
       if (!pending?.filtered) return;
-      const dataUrl = pending.filtered.toDataURL('image/jpeg', state.settings.quality);
+      const dataUrl = pending.finalDataUrl || pending.filtered.toDataURL('image/jpeg', cameraJpegQuality);
       state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: document.getElementById('scanFilterSelect').value });
       renderPages(); updateInfoCards(); state.cameraScan.pending = null;
       returnToOpenCamera('scanPagePreviewModal'); showToast('Página adicionada ao scanner');
