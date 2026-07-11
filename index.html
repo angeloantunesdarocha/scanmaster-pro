@@ -147,6 +147,11 @@
     .camera-frame video { width: 100%; height: 100%; object-fit: cover; }
     .camera-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
     .camera-detection-status { position: absolute; left: 50%; bottom: 16px; z-index: 3; transform: translateX(-50%); width: max-content; max-width: calc(100% - 28px); color: #fff; padding: 10px 16px; background: rgba(0,0,0,0.52); border-radius: 999px; font-size: 13px; text-align: center; pointer-events: none; }
+    .camera-focus-indicator { position: absolute; z-index: 4; width: 58px; height: 58px; border: 2px solid #00b0ff; border-radius: 14px; transform: translate(-50%,-50%) scale(1.2); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .28s ease; }
+    .camera-focus-indicator.active { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    .camera-zoom-control { position: absolute; right: 12px; top: 12px; z-index: 4; display: flex; align-items: center; gap: 6px; max-width: 150px; padding: 8px 10px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.52); font-size: 12px; }
+    .camera-zoom-control[hidden] { display: none; }
+    .camera-zoom-control input { width: 84px; accent-color: var(--secondary); }
     .scan-workflow-card { width: min(960px, calc(100vw - 20px)); height: min(92vh, 900px); overflow: hidden; grid-template-rows: auto minmax(0,1fr) auto; }
     .scan-workflow-body { min-height: 0; padding: 14px; overflow: auto; background: #111; }
     .scan-adjust-stage { position: relative; width: fit-content; min-width: 280px; margin: 0 auto; }
@@ -156,6 +161,8 @@
     .scan-workflow-footer .btn { min-width: 0; flex: 1 1 140px; padding: 12px; }
     .scan-filter-label { display: flex; align-items: center; gap: 8px; flex: 1 1 210px; }
     .scan-filter-label select { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); color: var(--text); }
+    .scan-adjust-zoom { display: flex; align-items: center; gap: 8px; flex: 1 1 180px; color: var(--text); }
+    .scan-adjust-zoom input { width: 100%; accent-color: var(--primary); }
     .camera-controls { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 14px; padding: 18px max(20px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: var(--surface); }
     .camera-actions { display: flex; gap: 12px; justify-self: start; }
     .camera-auto-control { display: flex; align-items: center; justify-self: end; gap: 8px; color: var(--text); font-size: 13px; }
@@ -414,12 +421,15 @@
       <div class="camera-frame">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="cameraDetectionOverlay" class="camera-overlay" aria-hidden="true"></canvas>
+        <span id="cameraFocusIndicator" class="camera-focus-indicator" aria-hidden="true"></span>
+        <label id="cameraZoomControl" class="camera-zoom-control" hidden>Zoom <input type="range" id="cameraZoomRange"></label>
         <span id="cameraDetectionStatus" class="camera-detection-status">Posicione o documento dentro da câmera</span>
       </div>
       <div class="camera-controls">
         <div class="camera-actions">
           <button class="cam-action" id="switchCamBtn" title="Trocar câmera" aria-label="Trocar câmera">🔄</button>
           <button class="cam-action" id="toggleFlashBtn" title="Flash" aria-label="Alternar flash">⚡</button>
+          <button class="cam-action" id="refocusCameraBtn" title="Refocar" aria-label="Refocar câmera">🎯</button>
         </div>
         <label class="camera-auto-control"><input type="checkbox" id="autoCaptureToggle">Captura automática</label>
         <button class="capture-btn" id="captureBtn" aria-label="Capturar foto">📸</button>
@@ -432,6 +442,7 @@
       <div class="modal-header"><div><p class="modal-title" id="scanAdjustTitle">Ajustar cantos</p><span style="color:var(--text-muted);font-size:13px;">Arraste os quatro pontos até as bordas do documento.</span></div></div>
       <div class="scan-workflow-body"><div class="scan-adjust-stage"><canvas id="scanAdjustCanvas"></canvas></div></div>
       <div class="scan-workflow-footer">
+        <label class="scan-adjust-zoom">Zoom <input type="range" id="scanAdjustZoom" min="1" max="3" step="0.1" value="1"></label>
         <button type="button" class="btn btn-secondary" id="scanRedetectBtn">Detectar novamente</button>
         <button type="button" class="btn btn-secondary" id="scanRestoreBtn">Restaurar</button>
         <button type="button" class="btn btn-primary" id="scanApplyCropBtn">Aplicar recorte</button>
@@ -644,7 +655,7 @@
       facingMode: 'environment',
       hasTorch: false,
       torchOn: false,
-      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0 },
+      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detectionActive: false, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0, performanceLevel: 'balanced', analysisWidth: 480, detectionInterval: 180, frameTimes: [], zoom: null },
       generatedPdfUrl: '',
       generatedPdfName: '',
       importedFiles: [],
@@ -812,6 +823,9 @@
       document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
       document.getElementById('switchCamBtn').addEventListener('click', toggleCamera);
       document.getElementById('toggleFlashBtn').addEventListener('click', toggleFlash);
+      document.getElementById('refocusCameraBtn').addEventListener('click', refocusCamera);
+      document.querySelector('#cameraModal .camera-frame').addEventListener('pointerup', focusCameraAtPoint);
+      document.getElementById('cameraZoomRange').addEventListener('input', changeCameraZoom);
       document.getElementById('captureBtn').addEventListener('click', capturePhoto);
       document.getElementById('autoCaptureToggle').addEventListener('change', event => {
         state.cameraScan.autoCapture = event.target.checked;
@@ -822,6 +836,7 @@
       document.getElementById('scanAdjustCanvas').addEventListener('pointermove', moveCornerDrag);
       document.getElementById('scanAdjustCanvas').addEventListener('pointerup', stopCornerDrag);
       document.getElementById('scanAdjustCanvas').addEventListener('pointercancel', stopCornerDrag);
+      document.getElementById('scanAdjustZoom').addEventListener('input', updateScanAdjustZoom);
       document.getElementById('scanRedetectBtn').addEventListener('click', redetectCapturedDocument);
       document.getElementById('scanRestoreBtn').addEventListener('click', restoreCapturedCorners);
       document.getElementById('scanApplyCropBtn').addEventListener('click', applyManualDocumentCrop);
@@ -998,6 +1013,41 @@
       document.head.appendChild(script);
     }
 
+    function configureCameraPerformance(video) {
+      const cores = navigator.hardwareConcurrency || 4;
+      const memory = navigator.deviceMemory || 4;
+      const pixels = (video.videoWidth || 1280) * (video.videoHeight || 720);
+      if (cores <= 4 || memory <= 3 || pixels > 8000000) {
+        Object.assign(state.cameraScan, { performanceLevel: 'economy', analysisWidth: 340, detectionInterval: 280 });
+      } else if (cores >= 8 && memory >= 6) {
+        Object.assign(state.cameraScan, { performanceLevel: 'high', analysisWidth: 560, detectionInterval: 130 });
+      } else {
+        Object.assign(state.cameraScan, { performanceLevel: 'balanced', analysisWidth: 440, detectionInterval: 190 });
+      }
+      state.cameraScan.frameTimes = [];
+    }
+
+    async function applyContinuousCameraControls(track, capabilities = track.getCapabilities()) {
+      const continuous = {};
+      if (capabilities.focusMode?.includes('continuous')) continuous.focusMode = 'continuous';
+      if (capabilities.exposureMode?.includes('continuous')) continuous.exposureMode = 'continuous';
+      if (capabilities.whiteBalanceMode?.includes('continuous')) continuous.whiteBalanceMode = 'continuous';
+      if (!Object.keys(continuous).length || track.readyState !== 'live') return false;
+      try { await track.applyConstraints({ advanced: [continuous] }); return true; }
+      catch (error) { console.info('Controles contínuos não disponíveis:', error.message); return false; }
+    }
+
+    function setupCameraZoom(track, capabilities) {
+      const control = document.getElementById('cameraZoomControl');
+      const range = document.getElementById('cameraZoomRange');
+      if (!capabilities.zoom || !Number.isFinite(capabilities.zoom.min) || capabilities.zoom.max <= capabilities.zoom.min) {
+        control.hidden = true; state.cameraScan.zoom = null; return;
+      }
+      const current = track.getSettings().zoom || capabilities.zoom.min;
+      range.min = capabilities.zoom.min; range.max = capabilities.zoom.max; range.step = capabilities.zoom.step || 0.1; range.value = current;
+      state.cameraScan.zoom = current; control.hidden = false;
+    }
+
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -1011,6 +1061,9 @@
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities();
         const settings = track.getSettings();
+        configureCameraPerformance(video);
+        await applyContinuousCameraControls(track, capabilities);
+        setupCameraZoom(track, capabilities);
         state.hasTorch = !!(capabilities.torch);
         console.info(`Câmera ativa em ${settings.width || video.videoWidth}×${settings.height || video.videoHeight}`);
         document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
@@ -1030,6 +1083,49 @@
       state.currentStream = null;
       state.torchOn = false;
       closeModal('cameraModal');
+    }
+
+    async function refocusCamera() {
+      const track = state.currentStream?.getVideoTracks()[0];
+      if (!track || track.readyState !== 'live') return showToast('Câmera indisponível para foco.', true);
+      const applied = await applyContinuousCameraControls(track);
+      showToast(applied ? 'Foco contínuo reaplicado' : 'O foco contínuo não é suportado neste aparelho.', !applied);
+    }
+
+    async function focusCameraAtPoint(event) {
+      if (event.target.closest('.camera-zoom-control')) return;
+      const frame = event.currentTarget; const rect = frame.getBoundingClientRect(); const video = document.getElementById('video');
+      const coverScale = Math.max(rect.width / (video.videoWidth || rect.width), rect.height / (video.videoHeight || rect.height));
+      const displayedWidth = (video.videoWidth || rect.width) * coverScale; const displayedHeight = (video.videoHeight || rect.height) * coverScale;
+      const cropX = (displayedWidth - rect.width) / 2; const cropY = (displayedHeight - rect.height) / 2;
+      const x = Math.max(0, Math.min(1, (event.clientX - rect.left + cropX) / displayedWidth));
+      const y = Math.max(0, Math.min(1, (event.clientY - rect.top + cropY) / displayedHeight));
+      const indicator = document.getElementById('cameraFocusIndicator');
+      indicator.style.left = `${x * 100}%`; indicator.style.top = `${y * 100}%`; indicator.classList.remove('active');
+      requestAnimationFrame(() => indicator.classList.add('active'));
+      setTimeout(() => indicator.classList.remove('active'), 900);
+      const track = state.currentStream?.getVideoTracks()[0];
+      if (!track || track.readyState !== 'live') return;
+      const capabilities = track.getCapabilities();
+      try {
+        const focusConstraint = {};
+        if (capabilities.pointsOfInterest) focusConstraint.pointsOfInterest = [{ x, y }];
+        if (capabilities.focusMode?.includes('single-shot')) focusConstraint.focusMode = 'single-shot';
+        else if (capabilities.focusMode?.includes('continuous')) focusConstraint.focusMode = 'continuous';
+        if (Object.keys(focusConstraint).length) await track.applyConstraints({ advanced: [focusConstraint] });
+        setTimeout(() => applyContinuousCameraControls(track), 750);
+      } catch (error) {
+        console.info('Foco por toque não suportado; mantendo foco contínuo:', error.message);
+        applyContinuousCameraControls(track);
+      }
+    }
+
+    async function changeCameraZoom(event) {
+      const track = state.currentStream?.getVideoTracks()[0];
+      if (!track || track.readyState !== 'live') return;
+      const zoom = Number(event.target.value);
+      try { await track.applyConstraints({ advanced: [{ zoom }] }); state.cameraScan.zoom = zoom; }
+      catch (error) { showToast('Não foi possível ajustar o zoom.', true); }
     }
 
     function updateCameraDetectionStatus(message, detected = false) {
@@ -1087,14 +1183,21 @@
 
     function startDocumentDetection() {
       stopDocumentDetection();
-      state.cameraScan.timer = setInterval(detectDocumentFrame, 160);
+      state.cameraScan.detectionActive = true;
       window.addEventListener('resize', resizeCameraOverlay);
       window.addEventListener('orientationchange', resizeCameraOverlay);
-      detectDocumentFrame();
+      scheduleDocumentDetection(0);
+    }
+
+    function scheduleDocumentDetection(delay = state.cameraScan.detectionInterval) {
+      if (!state.cameraScan.detectionActive) return;
+      if (state.cameraScan.timer) clearTimeout(state.cameraScan.timer);
+      state.cameraScan.timer = setTimeout(detectDocumentFrame, delay);
     }
 
     function stopDocumentDetection() {
-      if (state.cameraScan.timer) clearInterval(state.cameraScan.timer);
+      state.cameraScan.detectionActive = false;
+      if (state.cameraScan.timer) clearTimeout(state.cameraScan.timer);
       state.cameraScan.timer = null;
       state.cameraScan.detecting = false;
       state.cameraScan.corners = null;
@@ -1162,8 +1265,9 @@
       const video = document.getElementById('video');
       if (!state.cameraScan.cvReady || state.cameraScan.detecting || !video || video.readyState < 2 || !video.videoWidth) return;
       state.cameraScan.detecting = true;
+      const frameStartedAt = performance.now();
       const analysis = document.createElement('canvas');
-      const scale = Math.min(1, 480 / video.videoWidth);
+      const scale = Math.min(1, state.cameraScan.analysisWidth / video.videoWidth);
       analysis.width = Math.round(video.videoWidth * scale);
       analysis.height = Math.round(video.videoHeight * scale);
       analysis.getContext('2d').drawImage(video, 0, 0, analysis.width, analysis.height);
@@ -1192,6 +1296,13 @@
       } finally {
         [src, gray, blurred, edges, contours, hierarchy, kernel].forEach(mat => { if (mat && typeof mat.delete === 'function') mat.delete(); });
         state.cameraScan.detecting = false;
+        state.cameraScan.frameTimes.push(performance.now() - frameStartedAt);
+        if (state.cameraScan.frameTimes.length > 8) state.cameraScan.frameTimes.shift();
+        const average = state.cameraScan.frameTimes.reduce((sum, value) => sum + value, 0) / state.cameraScan.frameTimes.length;
+        if (average > 135 && state.cameraScan.performanceLevel !== 'economy') Object.assign(state.cameraScan, { performanceLevel: 'economy', analysisWidth: 340, detectionInterval: 280 });
+        else if (average > 85 && state.cameraScan.performanceLevel === 'high') Object.assign(state.cameraScan, { performanceLevel: 'balanced', analysisWidth: 440, detectionInterval: 190 });
+        analysis.width = analysis.height = 1;
+        scheduleDocumentDetection();
       }
     }
 
@@ -1260,7 +1371,7 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
-        const detected = !!state.cameraScan.corners;
+        const detected = !!state.cameraScan.corners && state.cameraScan.confidence >= 0.58 && state.cameraScan.consistentFrames >= 3;
         const corners = detected ? expandDocumentCorners(state.cameraScan.corners, canvas.width, canvas.height) : [
           { x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }
         ];
@@ -1268,7 +1379,7 @@
         const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
         state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, initialCorners: corners.map(point => ({ ...point })), detected, dragging: -1 };
         openCapturedDocumentAdjust();
-        showToast(detected ? 'Documento capturado e alinhado' : 'Imagem capturada para ajuste manual');
+        showToast(detected ? 'Documento capturado e alinhado' : 'Ajuste os cantos antes de continuar', !detected);
       } catch (error) {
         console.warn('Falha ao corrigir perspectiva:', error);
         const fallbackCorners = [{ x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }];
@@ -1341,7 +1452,14 @@
       if (!pending) return;
       if (document.getElementById('scanPagePreviewModal').classList.contains('active')) closeModal('scanPagePreviewModal');
       showCameraChildModal('scanAdjustModal');
-      requestAnimationFrame(drawCapturedCornerEditor);
+      document.getElementById('scanAdjustZoom').value = 1;
+      requestAnimationFrame(() => {
+        const canvas = document.getElementById('scanAdjustCanvas');
+        canvas.style.width = '';
+        canvas.style.maxWidth = '100%';
+        drawCapturedCornerEditor();
+        pending.editorBaseWidth = canvas.getBoundingClientRect().width;
+      });
     }
 
     function drawCapturedCornerEditor() {
@@ -1387,6 +1505,15 @@
       if (!pending) return;
       pending.dragging = -1;
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    function updateScanAdjustZoom(event) {
+      const pending = state.cameraScan.pending;
+      const canvas = document.getElementById('scanAdjustCanvas');
+      if (!pending || !canvas) return;
+      const baseWidth = pending.editorBaseWidth || canvas.getBoundingClientRect().width;
+      canvas.style.maxWidth = 'none';
+      canvas.style.width = `${Math.round(baseWidth * Number(event.target.value))}px`;
     }
 
     function detectCornersInStillCanvas(sourceCanvas) {
@@ -1481,17 +1608,25 @@
       if (!pending?.filtered) return;
       const dataUrl = pending.finalDataUrl || pending.filtered.toDataURL('image/jpeg', cameraJpegQuality);
       state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: document.getElementById('scanFilterSelect').value });
-      renderPages(); updateInfoCards(); state.cameraScan.pending = null;
+      renderPages(); updateInfoCards(); releasePendingCameraCanvases();
       returnToOpenCamera('scanPagePreviewModal'); showToast('Página adicionada ao scanner');
     }
 
     function retakeCapturedDocument() {
-      state.cameraScan.pending = null; returnToOpenCamera('scanPagePreviewModal');
+      releasePendingCameraCanvases(); returnToOpenCamera('scanPagePreviewModal');
     }
 
     function cancelCapturedDocument() {
       const modalId = document.getElementById('scanAdjustModal').classList.contains('active') ? 'scanAdjustModal' : 'scanPagePreviewModal';
-      state.cameraScan.pending = null; returnToOpenCamera(modalId);
+      releasePendingCameraCanvases(); returnToOpenCamera(modalId);
+    }
+
+    function releasePendingCameraCanvases() {
+      const pending = state.cameraScan.pending;
+      if (pending) [pending.original, pending.corrected, pending.filtered].forEach(canvas => { if (canvas) { canvas.width = 1; canvas.height = 1; } });
+      state.cameraScan.pending = null;
+      const preview = document.getElementById('scanPagePreviewImg');
+      if (preview) preview.removeAttribute('src');
     }
 
     function handleImageFiles(files) {
