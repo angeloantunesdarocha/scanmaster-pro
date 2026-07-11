@@ -145,10 +145,21 @@
     }
     .camera-frame { position: relative; overflow: hidden; aspect-ratio: 4 / 5; background: #000; }
     .camera-frame video { width: 100%; height: 100%; object-fit: cover; }
-    .camera-overlay { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 22%, transparent 78%, rgba(255,255,255,0.03) 100%); }
-    .camera-overlay::after { content: "Aproxime o documento para melhor leitura"; color: #fff; padding: 12px 18px; background: rgba(0,0,0,0.42); border-radius: 999px; font-size: 13px; box-shadow: 0 16px 36px rgba(0,0,0,0.22); }
+    .camera-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+    .camera-detection-status { position: absolute; left: 50%; bottom: 16px; z-index: 3; transform: translateX(-50%); width: max-content; max-width: calc(100% - 28px); color: #fff; padding: 10px 16px; background: rgba(0,0,0,0.52); border-radius: 999px; font-size: 13px; text-align: center; pointer-events: none; }
+    .scan-workflow-card { width: min(960px, calc(100vw - 20px)); height: min(92vh, 900px); overflow: hidden; grid-template-rows: auto minmax(0,1fr) auto; }
+    .scan-workflow-body { min-height: 0; padding: 14px; overflow: auto; background: #111; }
+    .scan-adjust-stage { position: relative; width: fit-content; min-width: 280px; margin: 0 auto; }
+    .scan-adjust-stage canvas { display: block; max-width: 100%; max-height: calc(92vh - 190px); width: auto; height: auto; touch-action: none; background: #000; }
+    .scan-workflow-preview { display: block; max-width: 100%; max-height: calc(92vh - 190px); width: auto; height: auto; margin: 0 auto; object-fit: contain; }
+    .scan-workflow-footer { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+    .scan-workflow-footer .btn { min-width: 0; flex: 1 1 140px; padding: 12px; }
+    .scan-filter-label { display: flex; align-items: center; gap: 8px; flex: 1 1 210px; }
+    .scan-filter-label select { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); color: var(--text); }
     .camera-controls { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; background: var(--surface); }
     .camera-actions { display: flex; gap: 12px; }
+    .camera-auto-control { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; }
+    .camera-auto-control input { width: 20px; height: 20px; accent-color: var(--primary); }
     .cam-action { width: 52px; height: 52px; border-radius: 18px; background: var(--surface-strong); display: grid; place-items: center; color: var(--text); box-shadow: var(--shadow); }
     .capture-btn { width: 76px; height: 76px; border-radius: 24px; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-size: 24px; display: grid; place-items: center; box-shadow: 0 20px 46px rgba(93,49,200,0.28); }
     .preview-meta { padding: 18px 22px; display: grid; gap: 14px; }
@@ -395,14 +406,44 @@
       </div>
       <div class="camera-frame">
         <video id="video" autoplay playsinline muted></video>
-        <div class="camera-overlay"></div>
+        <canvas id="cameraDetectionOverlay" class="camera-overlay" aria-hidden="true"></canvas>
+        <span id="cameraDetectionStatus" class="camera-detection-status">Posicione o documento dentro da câmera</span>
       </div>
       <div class="camera-controls">
         <div class="camera-actions">
           <button class="cam-action" id="switchCamBtn" title="Trocar câmera" aria-label="Trocar câmera">🔄</button>
           <button class="cam-action" id="toggleFlashBtn" title="Flash" aria-label="Alternar flash">⚡</button>
         </div>
+        <label class="camera-auto-control"><input type="checkbox" id="autoCaptureToggle">Captura automática</label>
         <button class="capture-btn" id="captureBtn" aria-label="Capturar foto">📸</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="scanAdjustModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="scanAdjustTitle">
+    <div class="modal-card scan-workflow-card">
+      <div class="modal-header"><div><p class="modal-title" id="scanAdjustTitle">Ajustar cantos</p><span style="color:var(--text-muted);font-size:13px;">Arraste os quatro pontos até as bordas do documento.</span></div></div>
+      <div class="scan-workflow-body"><div class="scan-adjust-stage"><canvas id="scanAdjustCanvas"></canvas></div></div>
+      <div class="scan-workflow-footer">
+        <button type="button" class="btn btn-secondary" id="scanRedetectBtn">Detectar novamente</button>
+        <button type="button" class="btn btn-secondary" id="scanRestoreBtn">Restaurar</button>
+        <button type="button" class="btn btn-primary" id="scanApplyCropBtn">Aplicar recorte</button>
+        <button type="button" class="btn btn-secondary" id="scanUseFullBtn">Usar imagem completa</button>
+        <button type="button" class="btn btn-secondary" id="scanAdjustCancelBtn">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="scanPagePreviewModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="scanPagePreviewTitle">
+    <div class="modal-card scan-workflow-card">
+      <div class="modal-header"><div><p class="modal-title" id="scanPagePreviewTitle">Pré-visualização da página</p><span style="color:var(--text-muted);font-size:13px;">Confira o resultado antes de adicionar ao scanner.</span></div></div>
+      <div class="scan-workflow-body"><img id="scanPagePreviewImg" class="scan-workflow-preview" alt="Documento digitalizado"></div>
+      <div class="scan-workflow-footer">
+        <label class="scan-filter-label">Filtro <select id="scanFilterSelect"><option value="original">Original</option><option value="enhanced" selected>Colorido melhorado</option><option value="grayscale">Tons de cinza</option><option value="document">Preto e branco/documento</option></select></label>
+        <button type="button" class="btn btn-secondary" id="scanRetakeBtn">Refazer</button>
+        <button type="button" class="btn btn-secondary" id="scanAdjustAgainBtn">Ajustar cantos</button>
+        <button type="button" class="btn btn-primary" id="scanAddPageBtn">Adicionar página</button>
+        <button type="button" class="btn btn-secondary" id="scanPreviewCancelBtn">Cancelar</button>
       </div>
     </div>
   </div>
@@ -596,6 +637,7 @@
       facingMode: 'environment',
       hasTorch: false,
       torchOn: false,
+      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detecting: false, corners: null, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0 },
       generatedPdfUrl: '',
       generatedPdfName: '',
       importedFiles: [],
@@ -763,6 +805,25 @@
       document.getElementById('switchCamBtn').addEventListener('click', toggleCamera);
       document.getElementById('toggleFlashBtn').addEventListener('click', toggleFlash);
       document.getElementById('captureBtn').addEventListener('click', capturePhoto);
+      document.getElementById('autoCaptureToggle').addEventListener('change', event => {
+        state.cameraScan.autoCapture = event.target.checked;
+        state.cameraScan.stableSince = 0;
+        state.cameraScan.lastCorners = null;
+      });
+      document.getElementById('scanAdjustCanvas').addEventListener('pointerdown', startCornerDrag);
+      document.getElementById('scanAdjustCanvas').addEventListener('pointermove', moveCornerDrag);
+      document.getElementById('scanAdjustCanvas').addEventListener('pointerup', stopCornerDrag);
+      document.getElementById('scanAdjustCanvas').addEventListener('pointercancel', stopCornerDrag);
+      document.getElementById('scanRedetectBtn').addEventListener('click', redetectCapturedDocument);
+      document.getElementById('scanRestoreBtn').addEventListener('click', restoreCapturedCorners);
+      document.getElementById('scanApplyCropBtn').addEventListener('click', applyManualDocumentCrop);
+      document.getElementById('scanUseFullBtn').addEventListener('click', useFullCapturedImage);
+      document.getElementById('scanAdjustCancelBtn').addEventListener('click', cancelCapturedDocument);
+      document.getElementById('scanFilterSelect').addEventListener('change', updateCapturedPreviewFilter);
+      document.getElementById('scanRetakeBtn').addEventListener('click', retakeCapturedDocument);
+      document.getElementById('scanAdjustAgainBtn').addEventListener('click', openCapturedDocumentAdjust);
+      document.getElementById('scanAddPageBtn').addEventListener('click', addCapturedDocumentPage);
+      document.getElementById('scanPreviewCancelBtn').addEventListener('click', cancelCapturedDocument);
       document.getElementById('addImageBtn').addEventListener('click', () => document.getElementById('fileInput').click());
       document.getElementById('fileInput').addEventListener('change', event => handleImageFiles(event.target.files));
       document.getElementById('generatePdfBtn').addEventListener('click', generatePdf);
@@ -900,7 +961,33 @@
         return showToast('Câmera indisponível no seu navegador.', true);
       }
       openModal('cameraModal');
+      loadOpenCvSafely();
       startCamera();
+    }
+
+    function loadOpenCvSafely() {
+      if (state.cameraScan.cvReady || state.cameraScan.cvFailed || state.cameraScan.loading) return;
+      state.cameraScan.loading = true;
+      const script = document.createElement('script');
+      script.src = 'https://docs.opencv.org/4.x/opencv.js';
+      script.async = true;
+      script.onload = () => {
+        const markReady = () => {
+          state.cameraScan.cvReady = !!(window.cv && cv.Mat);
+          state.cameraScan.cvFailed = !state.cameraScan.cvReady;
+          state.cameraScan.loading = false;
+          if (state.cameraScan.cvReady && state.currentStream) startDocumentDetection();
+        };
+        if (window.cv && cv.Mat) markReady();
+        else if (window.cv) cv.onRuntimeInitialized = markReady;
+        else markReady();
+      };
+      script.onerror = () => {
+        state.cameraScan.loading = false;
+        state.cameraScan.cvFailed = true;
+        updateCameraDetectionStatus('Detecção automática indisponível. A captura normal continua ativa.');
+      };
+      document.head.appendChild(script);
     }
 
     async function startCamera() {
@@ -917,18 +1004,159 @@
         const capabilities = track.getCapabilities();
         state.hasTorch = !!(capabilities.torch);
         document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
+        resizeCameraOverlay();
+        if (state.cameraScan.cvReady) startDocumentDetection();
+        else updateCameraDetectionStatus('Carregando detecção de documentos…');
       } catch (error) {
         showToast('Erro ao abrir câmera: ' + error.message, true);
       }
     }
 
     function closeCamera() {
+      stopDocumentDetection();
       if (state.currentStream) {
         state.currentStream.getTracks().forEach(track => track.stop());
       }
       state.currentStream = null;
       state.torchOn = false;
       closeModal('cameraModal');
+    }
+
+    function updateCameraDetectionStatus(message, detected = false) {
+      const status = document.getElementById('cameraDetectionStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.style.background = detected ? 'rgba(0,166,118,0.82)' : 'rgba(0,0,0,0.52)';
+    }
+
+    function resizeCameraOverlay() {
+      const canvas = document.getElementById('cameraDetectionOverlay');
+      if (!canvas) return;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+      const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+      drawDocumentOverlay();
+    }
+
+    function orderDocumentCorners(points) {
+      const sums = points.map(point => point.x + point.y);
+      const diffs = points.map(point => point.x - point.y);
+      return [points[sums.indexOf(Math.min(...sums))], points[diffs.indexOf(Math.max(...diffs))], points[sums.indexOf(Math.max(...sums))], points[diffs.indexOf(Math.min(...diffs))]];
+    }
+
+    function smoothDocumentCorners(next) {
+      if (!state.cameraScan.corners) return next;
+      return next.map((point, index) => ({
+        x: state.cameraScan.corners[index].x * 0.7 + point.x * 0.3,
+        y: state.cameraScan.corners[index].y * 0.7 + point.y * 0.3
+      }));
+    }
+
+    function drawDocumentOverlay() {
+      const canvas = document.getElementById('cameraDetectionOverlay');
+      const video = document.getElementById('video');
+      if (!canvas || !video) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const corners = state.cameraScan.corners;
+      if (!corners || !video.videoWidth || !video.videoHeight) return;
+      const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+      const offsetX = (canvas.width - video.videoWidth * scale) / 2;
+      const offsetY = (canvas.height - video.videoHeight * scale) / 2;
+      const mapped = corners.map(point => ({ x: offsetX + point.x * scale, y: offsetY + point.y * scale }));
+      ctx.strokeStyle = '#00b0ff';
+      ctx.fillStyle = '#00b0ff';
+      ctx.lineWidth = Math.max(3, canvas.width / 220);
+      ctx.beginPath();
+      mapped.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      ctx.closePath();
+      ctx.stroke();
+      mapped.forEach(point => { ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(6, canvas.width / 120), 0, Math.PI * 2); ctx.fill(); });
+    }
+
+    function startDocumentDetection() {
+      stopDocumentDetection();
+      state.cameraScan.timer = setInterval(detectDocumentFrame, 160);
+      window.addEventListener('resize', resizeCameraOverlay);
+      detectDocumentFrame();
+    }
+
+    function stopDocumentDetection() {
+      if (state.cameraScan.timer) clearInterval(state.cameraScan.timer);
+      state.cameraScan.timer = null;
+      state.cameraScan.detecting = false;
+      state.cameraScan.corners = null;
+      state.cameraScan.stableSince = 0;
+      state.cameraScan.lastCorners = null;
+      window.removeEventListener('resize', resizeCameraOverlay);
+      const overlay = document.getElementById('cameraDetectionOverlay');
+      if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    function detectDocumentFrame() {
+      const video = document.getElementById('video');
+      if (!state.cameraScan.cvReady || state.cameraScan.detecting || !video || video.readyState < 2 || !video.videoWidth) return;
+      state.cameraScan.detecting = true;
+      const analysis = document.createElement('canvas');
+      const scale = Math.min(1, 480 / video.videoWidth);
+      analysis.width = Math.round(video.videoWidth * scale);
+      analysis.height = Math.round(video.videoHeight * scale);
+      analysis.getContext('2d').drawImage(video, 0, 0, analysis.width, analysis.height);
+      let src, gray, blurred, edges, contours, hierarchy, kernel;
+      try {
+        src = cv.imread(analysis); gray = new cv.Mat(); blurred = new cv.Mat(); edges = new cv.Mat(); contours = new cv.MatVector(); hierarchy = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.equalizeHist(gray, gray);
+        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        cv.Canny(blurred, edges, 30, 110);
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        let best = null; let bestArea = analysis.width * analysis.height * 0.15;
+        for (let i = 0; i < contours.size(); i++) {
+          const contour = contours.get(i); const perimeter = cv.arcLength(contour, true); const approx = new cv.Mat();
+          cv.approxPolyDP(contour, approx, perimeter * 0.04, true);
+          const area = Math.abs(cv.contourArea(approx));
+          if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestArea && area < analysis.width * analysis.height * 0.98) {
+            bestArea = area;
+            best = Array.from({ length: 4 }, (_, index) => ({ x: approx.data32S[index * 2] / scale, y: approx.data32S[index * 2 + 1] / scale }));
+          }
+          approx.delete(); contour.delete();
+        }
+        state.cameraScan.corners = best ? smoothDocumentCorners(orderDocumentCorners(best)) : null;
+        updateAutoCaptureStability(state.cameraScan.corners);
+        updateCameraDetectionStatus(best ? 'Documento detectado' : 'Posicione o documento dentro da câmera', !!best);
+        resizeCameraOverlay();
+      } catch (error) {
+        console.warn('Falha na detecção do documento:', error);
+        updateCameraDetectionStatus('Detecção indisponível. Use a captura manual.');
+      } finally {
+        [src, gray, blurred, edges, contours, hierarchy, kernel].forEach(mat => { if (mat && typeof mat.delete === 'function') mat.delete(); });
+        state.cameraScan.detecting = false;
+      }
+    }
+
+    function updateAutoCaptureStability(corners) {
+      if (!corners) {
+        state.cameraScan.stableSince = 0;
+        state.cameraScan.lastCorners = null;
+        return;
+      }
+      const now = performance.now();
+      const video = document.getElementById('video');
+      const diagonal = Math.hypot(video.videoWidth || 1, video.videoHeight || 1);
+      const movement = state.cameraScan.lastCorners ? Math.max(...corners.map((point, index) => pointDistance(point, state.cameraScan.lastCorners[index]))) / diagonal : Infinity;
+      if (movement < 0.012) {
+        if (!state.cameraScan.stableSince) state.cameraScan.stableSince = now;
+      } else state.cameraScan.stableSince = now;
+      state.cameraScan.lastCorners = corners.map(point => ({ ...point }));
+      if (state.cameraScan.autoCapture && now - state.cameraScan.stableSince >= 1000 && now >= state.cameraScan.cooldownUntil && !state.cameraScan.processing && !state.cameraScan.pending) {
+        state.cameraScan.cooldownUntil = now + 3000;
+        state.cameraScan.stableSince = 0;
+        updateCameraDetectionStatus('Documento estável — capturando…', true);
+        setTimeout(() => { if (state.currentStream && !state.cameraScan.pending) capturePhoto(); }, 180);
+      }
     }
 
     async function toggleCamera() {
@@ -957,21 +1185,239 @@
       }
     }
 
-    function capturePhoto() {
+    async function capturePhoto() {
       const video = document.getElementById('video');
       if (!video || video.readyState < 2) {
         return showToast('Câmera ainda não está pronta.', true);
       }
+      if (state.cameraScan.processing) return;
+      state.cameraScan.processing = true;
+      state.cameraScan.cooldownUntil = performance.now() + 3000;
+      document.getElementById('captureBtn').disabled = true;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', state.settings.quality);
-      state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: 'none' });
-      renderPages();
-      updateInfoCards();
-      showToast('Página capturada com sucesso');
+      try {
+        const detected = !!state.cameraScan.corners;
+        const corners = detected ? state.cameraScan.corners.map(point => ({ ...point })) : [
+          { x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }
+        ];
+        stopDocumentDetection();
+        const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
+        state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, initialCorners: corners.map(point => ({ ...point })), detected, dragging: -1 };
+        openCapturedDocumentAdjust();
+        showToast(detected ? 'Documento capturado e alinhado' : 'Imagem capturada para ajuste manual');
+      } catch (error) {
+        console.warn('Falha ao corrigir perspectiva:', error);
+        const fallbackCorners = [{ x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }];
+        state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), filtered: null, corners: fallbackCorners, initialCorners: fallbackCorners.map(point => ({ ...point })), detected: false, dragging: -1 };
+        openCapturedDocumentAdjust();
+        showToast('Não foi possível corrigir automaticamente. Use o ajuste manual.', true);
+      } finally {
+        state.cameraScan.processing = false;
+        document.getElementById('captureBtn').disabled = false;
+      }
+    }
+
+    function cloneCanvas(source) {
+      const canvas = document.createElement('canvas');
+      canvas.width = source.width;
+      canvas.height = source.height;
+      canvas.getContext('2d').drawImage(source, 0, 0);
+      return canvas;
+    }
+
+    function pointDistance(a, b) {
+      return Math.hypot(b.x - a.x, b.y - a.y);
+    }
+
+    function applyDocumentPerspective(sourceCanvas, corners) {
+      if (!state.cameraScan.cvReady || !corners || corners.length !== 4) return cloneCanvas(sourceCanvas);
+      const ordered = orderDocumentCorners(corners);
+      const width = Math.max(1, Math.round(Math.max(pointDistance(ordered[0], ordered[1]), pointDistance(ordered[3], ordered[2]))));
+      const height = Math.max(1, Math.round(Math.max(pointDistance(ordered[0], ordered[3]), pointDistance(ordered[1], ordered[2]))));
+      let src, dst, sourcePoints, destinationPoints, transform;
+      try {
+        src = cv.imread(sourceCanvas); dst = new cv.Mat();
+        sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, ordered.flatMap(point => [point.x, point.y]));
+        destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, width - 1, 0, width - 1, height - 1, 0, height - 1]);
+        transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
+        cv.warpPerspective(src, dst, transform, new cv.Size(width, height), cv.INTER_CUBIC, cv.BORDER_REPLICATE);
+        const output = document.createElement('canvas');
+        output.width = width; output.height = height;
+        cv.imshow(output, dst);
+        return output;
+      } finally {
+        [src, dst, sourcePoints, destinationPoints, transform].forEach(mat => { if (mat && typeof mat.delete === 'function') mat.delete(); });
+      }
+    }
+
+    function showCameraChildModal(id) {
+      ['scanAdjustModal', 'scanPagePreviewModal'].forEach(modalId => { if (modalId !== id) closeModal(modalId); });
+      openModal(id);
+    }
+
+    function returnToOpenCamera(modalId) {
+      closeModal(modalId);
+      if (state.currentStream) {
+        openModal('cameraModal');
+        if (state.cameraScan.cvReady) startDocumentDetection();
+      }
+    }
+
+    function openCapturedDocumentAdjust() {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      if (document.getElementById('scanPagePreviewModal').classList.contains('active')) closeModal('scanPagePreviewModal');
+      showCameraChildModal('scanAdjustModal');
+      requestAnimationFrame(drawCapturedCornerEditor);
+    }
+
+    function drawCapturedCornerEditor() {
+      const pending = state.cameraScan.pending;
+      const canvas = document.getElementById('scanAdjustCanvas');
+      if (!pending || !canvas) return;
+      canvas.width = pending.original.width; canvas.height = pending.original.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(pending.original, 0, 0);
+      ctx.strokeStyle = '#00b0ff'; ctx.fillStyle = '#00b0ff'; ctx.lineWidth = Math.max(4, canvas.width / 250);
+      ctx.beginPath();
+      pending.corners.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      ctx.closePath(); ctx.stroke();
+      pending.corners.forEach(point => { ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(10, canvas.width / 90), 0, Math.PI * 2); ctx.fill(); });
+    }
+
+    function pointerToCapturedPoint(event) {
+      const canvas = document.getElementById('scanAdjustCanvas');
+      const rect = canvas.getBoundingClientRect();
+      return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height };
+    }
+
+    function startCornerDrag(event) {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      const point = pointerToCapturedPoint(event);
+      const maxDistance = Math.max(pending.original.width, pending.original.height) * 0.12;
+      let closest = -1; let distance = Infinity;
+      pending.corners.forEach((corner, index) => { const current = pointDistance(point, corner); if (current < distance) { distance = current; closest = index; } });
+      if (distance <= maxDistance) { pending.dragging = closest; event.currentTarget.setPointerCapture(event.pointerId); }
+    }
+
+    function moveCornerDrag(event) {
+      const pending = state.cameraScan.pending;
+      if (!pending || pending.dragging < 0) return;
+      const point = pointerToCapturedPoint(event);
+      pending.corners[pending.dragging] = { x: Math.max(0, Math.min(pending.original.width, point.x)), y: Math.max(0, Math.min(pending.original.height, point.y)) };
+      drawCapturedCornerEditor();
+    }
+
+    function stopCornerDrag(event) {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      pending.dragging = -1;
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    function detectCornersInStillCanvas(sourceCanvas) {
+      if (!state.cameraScan.cvReady) return null;
+      const analysis = document.createElement('canvas');
+      const scale = Math.min(1, 700 / sourceCanvas.width);
+      analysis.width = Math.round(sourceCanvas.width * scale); analysis.height = Math.round(sourceCanvas.height * scale);
+      analysis.getContext('2d').drawImage(sourceCanvas, 0, 0, analysis.width, analysis.height);
+      let src, gray, edges, contours, hierarchy, kernel;
+      try {
+        src = cv.imread(analysis); gray = new cv.Mat(); edges = new cv.Mat(); contours = new cv.MatVector(); hierarchy = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.equalizeHist(gray, gray); cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0); cv.Canny(gray, edges, 30, 110); kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5)); cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel); cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        let best = null; let bestArea = analysis.width * analysis.height * 0.1;
+        for (let i = 0; i < contours.size(); i++) {
+          const contour = contours.get(i); const approx = new cv.Mat(); cv.approxPolyDP(contour, approx, cv.arcLength(contour, true) * 0.04, true);
+          const area = Math.abs(cv.contourArea(approx));
+          if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestArea) { bestArea = area; best = Array.from({ length: 4 }, (_, n) => ({ x: approx.data32S[n * 2] / scale, y: approx.data32S[n * 2 + 1] / scale })); }
+          approx.delete(); contour.delete();
+        }
+        return best ? orderDocumentCorners(best) : null;
+      } finally { [src, gray, edges, contours, hierarchy, kernel].forEach(mat => { if (mat?.delete) mat.delete(); }); }
+    }
+
+    function redetectCapturedDocument() {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      try {
+        const corners = detectCornersInStillCanvas(pending.original);
+        if (!corners) return showToast('Nenhum documento foi detectado. Ajuste os cantos manualmente.', true);
+        pending.corners = corners; pending.initialCorners = corners.map(point => ({ ...point })); drawCapturedCornerEditor();
+      } catch (error) { showToast('Falha ao detectar novamente: ' + error.message, true); }
+    }
+
+    function restoreCapturedCorners() {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      pending.corners = pending.initialCorners.map(point => ({ ...point })); drawCapturedCornerEditor();
+    }
+
+    function applyManualDocumentCrop() {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      try { pending.corrected = applyDocumentPerspective(pending.original, pending.corners); openCapturedDocumentPreview(); }
+      catch (error) { showToast('Não foi possível aplicar o recorte: ' + error.message, true); }
+    }
+
+    function useFullCapturedImage() {
+      if (!state.cameraScan.pending) return;
+      state.cameraScan.pending.corrected = cloneCanvas(state.cameraScan.pending.original);
+      openCapturedDocumentPreview();
+    }
+
+    function createFilteredDocumentCanvas(source, mode) {
+      if (mode === 'original') return cloneCanvas(source);
+      if (mode === 'document' && state.cameraScan.cvReady) {
+        let src, gray, output;
+        try { src = cv.imread(source); gray = new cv.Mat(); output = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.adaptiveThreshold(gray, output, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 25, 12); const canvas = document.createElement('canvas'); cv.imshow(canvas, output); return canvas; }
+        finally { [src, gray, output].forEach(mat => { if (mat?.delete) mat.delete(); }); }
+      }
+      const canvas = cloneCanvas(source); const ctx = canvas.getContext('2d'); const image = ctx.getImageData(0, 0, canvas.width, canvas.height); const data = image.data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (mode === 'enhanced') { data[i] = Math.max(0, Math.min(255, (data[i] - 128) * 1.1 + 138)); data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * 1.1 + 138)); data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * 1.1 + 138)); }
+        else { const value = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114); const finalValue = mode === 'document' ? (value > 155 ? 255 : 0) : value; data[i] = data[i + 1] = data[i + 2] = finalValue; }
+      }
+      ctx.putImageData(image, 0, 0); return canvas;
+    }
+
+    function openCapturedDocumentPreview() {
+      if (!state.cameraScan.pending) return;
+      if (document.getElementById('scanAdjustModal').classList.contains('active')) closeModal('scanAdjustModal');
+      document.getElementById('scanFilterSelect').value = 'enhanced';
+      updateCapturedPreviewFilter();
+      showCameraChildModal('scanPagePreviewModal');
+    }
+
+    function updateCapturedPreviewFilter() {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      try {
+        pending.filtered = createFilteredDocumentCanvas(pending.corrected, document.getElementById('scanFilterSelect').value);
+        document.getElementById('scanPagePreviewImg').src = pending.filtered.toDataURL('image/jpeg', state.settings.quality);
+      } catch (error) { showToast('Falha ao aplicar filtro: ' + error.message, true); }
+    }
+
+    function addCapturedDocumentPage() {
+      const pending = state.cameraScan.pending;
+      if (!pending?.filtered) return;
+      const dataUrl = pending.filtered.toDataURL('image/jpeg', state.settings.quality);
+      state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: document.getElementById('scanFilterSelect').value });
+      renderPages(); updateInfoCards(); state.cameraScan.pending = null;
+      returnToOpenCamera('scanPagePreviewModal'); showToast('Página adicionada ao scanner');
+    }
+
+    function retakeCapturedDocument() {
+      state.cameraScan.pending = null; returnToOpenCamera('scanPagePreviewModal');
+    }
+
+    function cancelCapturedDocument() {
+      const modalId = document.getElementById('scanAdjustModal').classList.contains('active') ? 'scanAdjustModal' : 'scanPagePreviewModal';
+      state.cameraScan.pending = null; returnToOpenCamera(modalId);
     }
 
     function handleImageFiles(files) {
