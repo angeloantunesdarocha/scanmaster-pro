@@ -654,7 +654,7 @@
       facingMode: 'environment',
       hasTorch: false,
       torchOn: false,
-      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detectionActive: false, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0, performanceLevel: 'balanced', analysisWidth: 480, detectionInterval: 180, frameTimes: [], marginPercent: 8 },
+      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, inactivityTimer: null, autoCaptureTimer: null, detectionActive: false, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, stablePauseUntil: 0, lastCorners: null, cooldownUntil: 0, performanceLevel: 'balanced', analysisWidth: 560, detectionInterval: 333, frameTimes: [], lastDetectionAt: 0, skippedFrames: 0, captureCount: 0, longTaskDetected: false, prolongedPaused: false, marginPercent: 8 },
       generatedPdfUrl: '',
       generatedPdfName: '',
       importedFiles: [],
@@ -829,6 +829,8 @@
         state.cameraScan.autoCapture = event.target.checked;
         state.cameraScan.stableSince = 0;
         state.cameraScan.lastCorners = null;
+        state.cameraScan.stablePauseUntil = 0;
+        if (state.currentStream && !event.target.checked) resumeDocumentDetection();
       });
       document.getElementById('scanAdjustCanvas').addEventListener('pointerdown', startCornerDrag);
       document.getElementById('scanAdjustCanvas').addEventListener('pointermove', moveCornerDrag);
@@ -927,6 +929,14 @@
       document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.target, btn));
       });
+      document.addEventListener('visibilitychange', handleCameraVisibility);
+      window.addEventListener('pagehide', pauseCameraForPage);
+      window.addEventListener('pageshow', handleCameraVisibility);
+      window.addEventListener('beforeunload', closeCamera);
+      if ('PerformanceObserver' in window) {
+        try { new PerformanceObserver(list => { if (list.getEntries().some(entry => entry.duration >= 80)) state.cameraScan.longTaskDetected = true; }).observe({ type: 'longtask', buffered: true }); }
+        catch (error) { console.info('Monitor de long tasks indisponível:', error.message); }
+      }
     }
 
     function renderNav() {
@@ -982,6 +992,10 @@
         return showToast('Câmera indisponível no seu navegador.', true);
       }
       openModal('cameraModal');
+      state.cameraScan.prolongedPaused = false;
+      state.cameraScan.captureCount = 0;
+      state.cameraScan.skippedFrames = 0;
+      resetCameraInactivityTimer();
       loadOpenCvSafely();
       startCamera();
     }
@@ -1016,13 +1030,32 @@
       const memory = navigator.deviceMemory || 4;
       const pixels = (video.videoWidth || 1280) * (video.videoHeight || 720);
       if (cores <= 4 || memory <= 3 || pixels > 8000000) {
-        Object.assign(state.cameraScan, { performanceLevel: 'economy', analysisWidth: 340, detectionInterval: 280 });
+        applyCameraPerformanceProfile('economy');
       } else if (cores >= 8 && memory >= 6) {
-        Object.assign(state.cameraScan, { performanceLevel: 'high', analysisWidth: 560, detectionInterval: 130 });
+        applyCameraPerformanceProfile('high');
       } else {
-        Object.assign(state.cameraScan, { performanceLevel: 'balanced', analysisWidth: 440, detectionInterval: 190 });
+        applyCameraPerformanceProfile('balanced');
       }
       state.cameraScan.frameTimes = [];
+    }
+
+    function applyCameraPerformanceProfile(profile) {
+      const profiles = {
+        economy: { analysisWidth: 480, detectionInterval: 600 },
+        balanced: { analysisWidth: 560, detectionInterval: 333 },
+        high: { analysisWidth: 640, detectionInterval: 200 }
+      };
+      Object.assign(state.cameraScan, { performanceLevel: profile, ...profiles[profile] });
+    }
+
+    function resetCameraInactivityTimer() {
+      if (state.cameraScan.inactivityTimer) clearTimeout(state.cameraScan.inactivityTimer);
+      state.cameraScan.inactivityTimer = setTimeout(() => {
+        if (!state.currentStream || state.cameraScan.processing || state.cameraScan.pending) return;
+        state.cameraScan.prolongedPaused = true;
+        pauseDocumentDetection(true);
+        updateCameraDetectionStatus('Scanner pausado para reduzir consumo e aquecimento. Toque para continuar.');
+      }, 150000);
     }
 
     async function applyContinuousCameraControls(track, capabilities = track.getCapabilities()) {
@@ -1037,6 +1070,7 @@
 
     async function startCamera() {
       try {
+        if (state.currentStream) closeCameraStream();
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: state.facingMode }, width: { ideal: 2560 }, height: { ideal: 1920 }, frameRate: { ideal: 30, max: 30 } },
           audio: false
@@ -1054,6 +1088,7 @@
         console.info(`Câmera ativa em ${settings.width || video.videoWidth}×${settings.height || video.videoHeight}`);
         document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
         resizeCameraOverlay();
+        resetCameraInactivityTimer();
         if (state.cameraScan.cvReady) startDocumentDetection();
         else updateCameraDetectionStatus('Carregando detecção de documentos…');
       } catch (error) {
@@ -1063,16 +1098,41 @@
 
     function closeCamera() {
       stopDocumentDetection();
-      if (state.currentStream) {
-        state.currentStream.getTracks().forEach(track => track.stop());
-      }
-      state.currentStream = null;
+      closeCameraStream();
+      if (state.cameraScan.inactivityTimer) clearTimeout(state.cameraScan.inactivityTimer);
+      if (state.cameraScan.autoCaptureTimer) clearTimeout(state.cameraScan.autoCaptureTimer);
+      state.cameraScan.inactivityTimer = null;
+      state.cameraScan.autoCaptureTimer = null;
+      state.cameraScan.prolongedPaused = false;
       state.torchOn = false;
       closeModal('cameraModal');
     }
 
+    function closeCameraStream() {
+      if (state.currentStream) state.currentStream.getTracks().forEach(track => track.stop());
+      state.currentStream = null;
+      const video = document.getElementById('video');
+      if (video) { video.pause(); video.srcObject = null; }
+    }
+
+    function pauseCameraForPage() {
+      if (state.currentStream) pauseDocumentDetection(true);
+    }
+
+    function handleCameraVisibility() {
+      if (document.hidden) return pauseCameraForPage();
+      if (state.currentStream && document.getElementById('cameraModal').classList.contains('active') && !state.cameraScan.pending && !state.cameraScan.processing) resumeDocumentDetection();
+    }
+
     async function focusCameraAtPoint(event) {
       if (event.target.closest('.camera-margin-control')) return;
+      if (state.cameraScan.prolongedPaused) {
+        state.cameraScan.prolongedPaused = false;
+        resetCameraInactivityTimer();
+        resumeDocumentDetection();
+        updateCameraDetectionStatus('Posicione o documento dentro da câmera');
+      }
+      state.cameraScan.stablePauseUntil = 0;
       const frame = event.currentTarget; const rect = frame.getBoundingClientRect(); const video = document.getElementById('video');
       const coverScale = Math.max(rect.width / (video.videoWidth || rect.width), rect.height / (video.videoHeight || rect.height));
       const displayedWidth = (video.videoWidth || rect.width) * coverScale; const displayedHeight = (video.videoHeight || rect.height) * coverScale;
@@ -1182,6 +1242,7 @@
 
     function startDocumentDetection() {
       stopDocumentDetection();
+      if (!canRunDocumentDetection()) return;
       state.cameraScan.detectionActive = true;
       window.addEventListener('resize', resizeCameraOverlay);
       window.addEventListener('orientationchange', resizeCameraOverlay);
@@ -1194,20 +1255,42 @@
       state.cameraScan.timer = setTimeout(detectDocumentFrame, delay);
     }
 
-    function stopDocumentDetection() {
+    function canRunDocumentDetection() {
+      const video = document.getElementById('video');
+      return !!(state.cameraScan.cvReady && state.currentStream && !document.hidden && !state.cameraScan.processing && !state.cameraScan.pending && !state.cameraScan.prolongedPaused && document.getElementById('cameraModal').classList.contains('active') && video && video.readyState >= 2 && video.videoWidth);
+    }
+
+    function pauseDocumentDetection(preserveOverlay = true) {
       state.cameraScan.detectionActive = false;
       if (state.cameraScan.timer) clearTimeout(state.cameraScan.timer);
       state.cameraScan.timer = null;
+      if (!preserveOverlay) {
+        state.cameraScan.corners = null;
+        const overlay = document.getElementById('cameraDetectionOverlay');
+        if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+      }
+      window.removeEventListener('resize', resizeCameraOverlay);
+      window.removeEventListener('orientationchange', resizeCameraOverlay);
+    }
+
+    function resumeDocumentDetection() {
+      if (!canRunDocumentDetection()) return;
+      pauseDocumentDetection(true);
+      state.cameraScan.detectionActive = true;
+      state.cameraScan.lastDetectionAt = 0;
+      window.addEventListener('resize', resizeCameraOverlay);
+      window.addEventListener('orientationchange', resizeCameraOverlay);
+      scheduleDocumentDetection(0);
+    }
+
+    function stopDocumentDetection() {
+      pauseDocumentDetection(false);
       state.cameraScan.detecting = false;
-      state.cameraScan.corners = null;
       state.cameraScan.stableSince = 0;
+      state.cameraScan.stablePauseUntil = 0;
       state.cameraScan.lastCorners = null;
       state.cameraScan.confidence = 0;
       state.cameraScan.consistentFrames = 0;
-      window.removeEventListener('resize', resizeCameraOverlay);
-      window.removeEventListener('orientationchange', resizeCameraOverlay);
-      const overlay = document.getElementById('cameraDetectionOverlay');
-      if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
     }
 
     function scoreDocumentQuadrilateral(points, areaRatio, width, height) {
@@ -1262,8 +1345,14 @@
 
     function detectDocumentFrame() {
       const video = document.getElementById('video');
-      if (!state.cameraScan.cvReady || state.cameraScan.detecting || !video || video.readyState < 2 || !video.videoWidth) return;
+      if (!state.cameraScan.detectionActive) return;
+      if (!canRunDocumentDetection()) { state.cameraScan.skippedFrames++; pauseDocumentDetection(true); return; }
+      const now = performance.now();
+      const minimumDelay = state.cameraScan.detectionInterval - (now - state.cameraScan.lastDetectionAt);
+      if (state.cameraScan.detecting || minimumDelay > 1) { state.cameraScan.skippedFrames++; scheduleDocumentDetection(Math.max(16, minimumDelay)); return; }
+      if (state.cameraScan.stablePauseUntil > now) { state.cameraScan.skippedFrames++; scheduleDocumentDetection(state.cameraScan.stablePauseUntil - now); return; }
       state.cameraScan.detecting = true;
+      state.cameraScan.lastDetectionAt = now;
       const frameStartedAt = performance.now();
       const analysis = document.createElement('canvas');
       const scale = Math.min(1, state.cameraScan.analysisWidth / video.videoWidth);
@@ -1298,8 +1387,9 @@
         state.cameraScan.frameTimes.push(performance.now() - frameStartedAt);
         if (state.cameraScan.frameTimes.length > 8) state.cameraScan.frameTimes.shift();
         const average = state.cameraScan.frameTimes.reduce((sum, value) => sum + value, 0) / state.cameraScan.frameTimes.length;
-        if (average > 135 && state.cameraScan.performanceLevel !== 'economy') Object.assign(state.cameraScan, { performanceLevel: 'economy', analysisWidth: 340, detectionInterval: 280 });
-        else if (average > 85 && state.cameraScan.performanceLevel === 'high') Object.assign(state.cameraScan, { performanceLevel: 'balanced', analysisWidth: 440, detectionInterval: 190 });
+        if (average > 150 || state.cameraScan.longTaskDetected || state.cameraScan.captureCount >= 6) applyCameraPerformanceProfile('economy');
+        else if (average > 90 && state.cameraScan.performanceLevel === 'high') applyCameraPerformanceProfile('balanced');
+        state.cameraScan.longTaskDetected = false;
         analysis.width = analysis.height = 1;
         scheduleDocumentDetection();
       }
@@ -1323,7 +1413,11 @@
         state.cameraScan.cooldownUntil = now + 3000;
         state.cameraScan.stableSince = 0;
         updateCameraDetectionStatus('Documento estável — capturando…', true);
-        setTimeout(() => { if (state.currentStream && !state.cameraScan.pending) capturePhoto(); }, 180);
+        pauseDocumentDetection(true);
+        if (state.cameraScan.autoCaptureTimer) clearTimeout(state.cameraScan.autoCaptureTimer);
+        state.cameraScan.autoCaptureTimer = setTimeout(() => { state.cameraScan.autoCaptureTimer = null; if (state.currentStream && !state.cameraScan.pending) capturePhoto(); }, 180);
+      } else if (!state.cameraScan.autoCapture && now - state.cameraScan.stableSince >= 1000) {
+        state.cameraScan.stablePauseUntil = now + 1200;
       }
     }
 
@@ -1359,8 +1453,13 @@
         return showToast('Câmera ainda não está pronta.', true);
       }
       if (state.cameraScan.processing) return;
+      const detected = !!state.cameraScan.corners && state.cameraScan.confidence >= 0.58 && state.cameraScan.consistentFrames >= 3;
+      const detectedCorners = detected ? state.cameraScan.corners.map(point => ({ ...point })) : null;
+      pauseDocumentDetection(true);
       state.cameraScan.processing = true;
       state.cameraScan.cooldownUntil = performance.now() + 3000;
+      state.cameraScan.captureCount++;
+      resetCameraInactivityTimer();
       document.getElementById('captureBtn').disabled = true;
       showLoading('Corrigindo perspectiva…');
       await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1370,8 +1469,7 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
-        const detected = !!state.cameraScan.corners && state.cameraScan.confidence >= 0.58 && state.cameraScan.consistentFrames >= 3;
-        const corners = detected ? expandDocumentCorners(state.cameraScan.corners, canvas.width, canvas.height) : getCameraMarginCorners(canvas.width, canvas.height);
+        const corners = detected ? expandDocumentCorners(detectedCorners, canvas.width, canvas.height) : getCameraMarginCorners(canvas.width, canvas.height);
         stopDocumentDetection();
         const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
         state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, initialCorners: corners.map(point => ({ ...point })), detected, dragging: -1 };
@@ -1440,7 +1538,8 @@
       closeModal(modalId);
       if (state.currentStream) {
         openModal('cameraModal');
-        if (state.cameraScan.cvReady) startDocumentDetection();
+        resetCameraInactivityTimer();
+        if (state.cameraScan.cvReady) resumeDocumentDetection();
       }
     }
 
