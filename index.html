@@ -149,9 +149,9 @@
     .camera-detection-status { position: absolute; left: 50%; bottom: 16px; z-index: 3; transform: translateX(-50%); width: max-content; max-width: calc(100% - 28px); color: #fff; padding: 10px 16px; background: rgba(0,0,0,0.52); border-radius: 999px; font-size: 13px; text-align: center; pointer-events: none; }
     .camera-focus-indicator { position: absolute; z-index: 4; width: 58px; height: 58px; border: 2px solid #00b0ff; border-radius: 14px; transform: translate(-50%,-50%) scale(1.2); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .28s ease; }
     .camera-focus-indicator.active { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-    .camera-zoom-control { position: absolute; right: 12px; top: 12px; z-index: 4; display: flex; align-items: center; gap: 6px; max-width: 150px; padding: 8px 10px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.52); font-size: 12px; }
-    .camera-zoom-control[hidden] { display: none; }
-    .camera-zoom-control input { width: 84px; accent-color: var(--secondary); }
+    .camera-margin-control { position: absolute; left: 50%; top: 12px; z-index: 4; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; width: min(230px, calc(100% - 28px)); padding: 8px 11px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.52); font-size: 12px; }
+    .camera-margin-control input { min-width: 0; flex: 1; accent-color: var(--secondary); }
+    .camera-margin-control output { min-width: 28px; text-align: right; }
     .scan-workflow-card { width: min(960px, calc(100vw - 20px)); height: min(92vh, 900px); overflow: hidden; grid-template-rows: auto minmax(0,1fr) auto; }
     .scan-workflow-body { min-height: 0; padding: 14px; overflow: auto; background: #111; }
     .scan-adjust-stage { position: relative; width: fit-content; min-width: 280px; margin: 0 auto; }
@@ -422,14 +422,13 @@
         <video id="video" autoplay playsinline muted></video>
         <canvas id="cameraDetectionOverlay" class="camera-overlay" aria-hidden="true"></canvas>
         <span id="cameraFocusIndicator" class="camera-focus-indicator" aria-hidden="true"></span>
-        <label id="cameraZoomControl" class="camera-zoom-control" hidden>Zoom <input type="range" id="cameraZoomRange"></label>
+        <label class="camera-margin-control">Margem <input type="range" id="cameraMarginRange" min="0" max="20" step="1" value="8"><output id="cameraMarginValue" for="cameraMarginRange">8%</output></label>
         <span id="cameraDetectionStatus" class="camera-detection-status">Posicione o documento dentro da câmera</span>
       </div>
       <div class="camera-controls">
         <div class="camera-actions">
           <button class="cam-action" id="switchCamBtn" title="Trocar câmera" aria-label="Trocar câmera">🔄</button>
           <button class="cam-action" id="toggleFlashBtn" title="Flash" aria-label="Alternar flash">⚡</button>
-          <button class="cam-action" id="refocusCameraBtn" title="Refocar" aria-label="Refocar câmera">🎯</button>
         </div>
         <label class="camera-auto-control"><input type="checkbox" id="autoCaptureToggle">Captura automática</label>
         <button class="capture-btn" id="captureBtn" aria-label="Capturar foto">📸</button>
@@ -655,7 +654,7 @@
       facingMode: 'environment',
       hasTorch: false,
       torchOn: false,
-      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detectionActive: false, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0, performanceLevel: 'balanced', analysisWidth: 480, detectionInterval: 180, frameTimes: [], zoom: null },
+      cameraScan: { cvReady: false, cvFailed: false, loading: false, timer: null, detectionActive: false, detecting: false, corners: null, confidence: 0, consistentFrames: 0, processing: false, pending: null, autoCapture: false, stableSince: 0, lastCorners: null, cooldownUntil: 0, performanceLevel: 'balanced', analysisWidth: 480, detectionInterval: 180, frameTimes: [], marginPercent: 8 },
       generatedPdfUrl: '',
       generatedPdfName: '',
       importedFiles: [],
@@ -823,9 +822,8 @@
       document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
       document.getElementById('switchCamBtn').addEventListener('click', toggleCamera);
       document.getElementById('toggleFlashBtn').addEventListener('click', toggleFlash);
-      document.getElementById('refocusCameraBtn').addEventListener('click', refocusCamera);
       document.querySelector('#cameraModal .camera-frame').addEventListener('pointerup', focusCameraAtPoint);
-      document.getElementById('cameraZoomRange').addEventListener('input', changeCameraZoom);
+      document.getElementById('cameraMarginRange').addEventListener('input', updateCameraMargin);
       document.getElementById('captureBtn').addEventListener('click', capturePhoto);
       document.getElementById('autoCaptureToggle').addEventListener('change', event => {
         state.cameraScan.autoCapture = event.target.checked;
@@ -1037,17 +1035,6 @@
       catch (error) { console.info('Controles contínuos não disponíveis:', error.message); return false; }
     }
 
-    function setupCameraZoom(track, capabilities) {
-      const control = document.getElementById('cameraZoomControl');
-      const range = document.getElementById('cameraZoomRange');
-      if (!capabilities.zoom || !Number.isFinite(capabilities.zoom.min) || capabilities.zoom.max <= capabilities.zoom.min) {
-        control.hidden = true; state.cameraScan.zoom = null; return;
-      }
-      const current = track.getSettings().zoom || capabilities.zoom.min;
-      range.min = capabilities.zoom.min; range.max = capabilities.zoom.max; range.step = capabilities.zoom.step || 0.1; range.value = current;
-      state.cameraScan.zoom = current; control.hidden = false;
-    }
-
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -1063,7 +1050,6 @@
         const settings = track.getSettings();
         configureCameraPerformance(video);
         await applyContinuousCameraControls(track, capabilities);
-        setupCameraZoom(track, capabilities);
         state.hasTorch = !!(capabilities.torch);
         console.info(`Câmera ativa em ${settings.width || video.videoWidth}×${settings.height || video.videoHeight}`);
         document.getElementById('toggleFlashBtn').style.opacity = state.hasTorch ? '1' : '0.4';
@@ -1085,15 +1071,8 @@
       closeModal('cameraModal');
     }
 
-    async function refocusCamera() {
-      const track = state.currentStream?.getVideoTracks()[0];
-      if (!track || track.readyState !== 'live') return showToast('Câmera indisponível para foco.', true);
-      const applied = await applyContinuousCameraControls(track);
-      showToast(applied ? 'Foco contínuo reaplicado' : 'O foco contínuo não é suportado neste aparelho.', !applied);
-    }
-
     async function focusCameraAtPoint(event) {
-      if (event.target.closest('.camera-zoom-control')) return;
+      if (event.target.closest('.camera-margin-control')) return;
       const frame = event.currentTarget; const rect = frame.getBoundingClientRect(); const video = document.getElementById('video');
       const coverScale = Math.max(rect.width / (video.videoWidth || rect.width), rect.height / (video.videoHeight || rect.height));
       const displayedWidth = (video.videoWidth || rect.width) * coverScale; const displayedHeight = (video.videoHeight || rect.height) * coverScale;
@@ -1120,12 +1099,12 @@
       }
     }
 
-    async function changeCameraZoom(event) {
-      const track = state.currentStream?.getVideoTracks()[0];
-      if (!track || track.readyState !== 'live') return;
-      const zoom = Number(event.target.value);
-      try { await track.applyConstraints({ advanced: [{ zoom }] }); state.cameraScan.zoom = zoom; }
-      catch (error) { showToast('Não foi possível ajustar o zoom.', true); }
+    function updateCameraMargin(event) {
+      state.cameraScan.marginPercent = Math.max(0, Math.min(20, Number(event.target.value) || 0));
+      document.getElementById('cameraMarginValue').textContent = `${state.cameraScan.marginPercent}%`;
+      state.cameraScan.stableSince = 0;
+      state.cameraScan.lastCorners = null;
+      resizeCameraOverlay();
     }
 
     function updateCameraDetectionStatus(message, detected = false) {
@@ -1159,14 +1138,34 @@
       }));
     }
 
+    function getVisibleCameraBounds(width, height) {
+      const frame = document.querySelector('#cameraModal .camera-frame');
+      const viewportWidth = frame?.clientWidth || width; const viewportHeight = frame?.clientHeight || height;
+      const coverScale = Math.max(viewportWidth / width, viewportHeight / height);
+      const visibleWidth = viewportWidth / coverScale; const visibleHeight = viewportHeight / coverScale;
+      return { left: (width - visibleWidth) / 2, top: (height - visibleHeight) / 2, width: visibleWidth, height: visibleHeight };
+    }
+
+    function getCameraMarginCorners(width, height) {
+      const visible = getVisibleCameraBounds(width, height);
+      const margin = state.cameraScan.marginPercent / 100;
+      const insetX = visible.width * margin; const insetY = visible.height * margin;
+      return [{ x: visible.left + insetX, y: visible.top + insetY }, { x: visible.left + visible.width - insetX, y: visible.top + insetY }, { x: visible.left + visible.width - insetX, y: visible.top + visible.height - insetY }, { x: visible.left + insetX, y: visible.top + visible.height - insetY }];
+    }
+
+    function constrainCornersToCameraMargin(corners, width, height) {
+      const bounds = getCameraMarginCorners(width, height);
+      return corners.map(point => ({ x: Math.max(bounds[0].x, Math.min(bounds[2].x, point.x)), y: Math.max(bounds[0].y, Math.min(bounds[2].y, point.y)) }));
+    }
+
     function drawDocumentOverlay() {
       const canvas = document.getElementById('cameraDetectionOverlay');
       const video = document.getElementById('video');
       if (!canvas || !video) return;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const corners = state.cameraScan.corners;
-      if (!corners || !video.videoWidth || !video.videoHeight) return;
+      if (!video.videoWidth || !video.videoHeight) return;
+      const corners = state.cameraScan.corners || getCameraMarginCorners(video.videoWidth, video.videoHeight);
       const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
       const offsetX = (canvas.width - video.videoWidth * scale) / 2;
       const offsetY = (canvas.height - video.videoHeight * scale) / 2;
@@ -1285,7 +1284,7 @@
         const confident = candidate.points && candidate.confidence >= 0.58;
         state.cameraScan.consistentFrames = confident ? state.cameraScan.consistentFrames + 1 : Math.max(0, state.cameraScan.consistentFrames - 1);
         state.cameraScan.confidence = candidate.confidence;
-        state.cameraScan.corners = confident ? smoothDocumentCorners(orderDocumentCorners(candidate.points)) : null;
+        state.cameraScan.corners = confident ? smoothDocumentCorners(constrainCornersToCameraMargin(orderDocumentCorners(candidate.points), video.videoWidth, video.videoHeight)) : null;
         updateAutoCaptureStability(state.cameraScan.corners);
         const confirmed = confident && state.cameraScan.consistentFrames >= 3;
         updateCameraDetectionStatus(confirmed ? 'Documento detectado' : candidate.points ? 'Ajuste o enquadramento' : 'Aproxime o documento', confirmed);
@@ -1372,9 +1371,7 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
         const detected = !!state.cameraScan.corners && state.cameraScan.confidence >= 0.58 && state.cameraScan.consistentFrames >= 3;
-        const corners = detected ? expandDocumentCorners(state.cameraScan.corners, canvas.width, canvas.height) : [
-          { x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }
-        ];
+        const corners = detected ? expandDocumentCorners(state.cameraScan.corners, canvas.width, canvas.height) : getCameraMarginCorners(canvas.width, canvas.height);
         stopDocumentDetection();
         const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
         state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, initialCorners: corners.map(point => ({ ...point })), detected, dragging: -1 };
@@ -1382,7 +1379,7 @@
         showToast(detected ? 'Documento capturado e alinhado' : 'Ajuste os cantos antes de continuar', !detected);
       } catch (error) {
         console.warn('Falha ao corrigir perspectiva:', error);
-        const fallbackCorners = [{ x: 0, y: 0 }, { x: canvas.width, y: 0 }, { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }];
+        const fallbackCorners = getCameraMarginCorners(canvas.width, canvas.height);
         state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), filtered: null, corners: fallbackCorners, initialCorners: fallbackCorners.map(point => ({ ...point })), detected: false, dragging: -1 };
         openCapturedDocumentAdjust();
         showToast('Não foi possível corrigir automaticamente. Use o ajuste manual.', true);
@@ -1537,7 +1534,7 @@
       try {
         const corners = detectCornersInStillCanvas(pending.original);
         if (!corners) return showToast('Nenhum documento foi detectado. Ajuste os cantos manualmente.', true);
-        pending.corners = corners; pending.initialCorners = corners.map(point => ({ ...point })); drawCapturedCornerEditor();
+        pending.corners = constrainCornersToCameraMargin(corners, pending.original.width, pending.original.height); pending.initialCorners = pending.corners.map(point => ({ ...point })); drawCapturedCornerEditor();
       } catch (error) { showToast('Falha ao detectar novamente: ' + error.message, true); }
     }
 
