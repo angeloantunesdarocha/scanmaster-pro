@@ -161,8 +161,6 @@
     .scan-workflow-footer .btn { min-width: 0; flex: 1 1 140px; padding: 12px; }
     .scan-filter-label { display: flex; align-items: center; gap: 8px; flex: 1 1 210px; }
     .scan-filter-label select { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); color: var(--text); }
-    .scan-adjust-zoom { display: flex; align-items: center; gap: 8px; flex: 1 1 180px; color: var(--text); }
-    .scan-adjust-zoom input { width: 100%; accent-color: var(--primary); }
     .camera-controls { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 14px; padding: 18px max(20px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: var(--surface); }
     .camera-actions { display: flex; gap: 12px; justify-self: start; }
     .camera-auto-control { display: flex; align-items: center; justify-self: end; gap: 8px; color: var(--text); font-size: 13px; }
@@ -462,9 +460,6 @@
       <div class="modal-header"><div><p class="modal-title" id="scanAdjustTitle">Ajustar cantos</p><span style="color:var(--text-muted);font-size:13px;">Arraste os quatro pontos até as bordas do documento.</span></div></div>
       <div class="scan-workflow-body"><div class="scan-adjust-stage"><canvas id="scanAdjustCanvas"></canvas></div></div>
       <div class="scan-workflow-footer">
-        <label class="scan-adjust-zoom">Zoom <input type="range" id="scanAdjustZoom" min="1" max="3" step="0.1" value="1"></label>
-        <button type="button" class="btn btn-secondary" id="scanRedetectBtn">Detectar novamente</button>
-        <button type="button" class="btn btn-secondary" id="scanRestoreBtn">Restaurar</button>
         <button type="button" class="btn btn-primary" id="scanApplyCropBtn">Aplicar recorte</button>
         <button type="button" class="btn btn-secondary" id="scanUseFullBtn">Usar imagem completa</button>
         <button type="button" class="btn btn-secondary" id="scanAdjustCancelBtn">Cancelar</button>
@@ -862,9 +857,6 @@
       document.getElementById('scanAdjustCanvas').addEventListener('pointermove', moveCornerDrag);
       document.getElementById('scanAdjustCanvas').addEventListener('pointerup', stopCornerDrag);
       document.getElementById('scanAdjustCanvas').addEventListener('pointercancel', stopCornerDrag);
-      document.getElementById('scanAdjustZoom').addEventListener('input', updateScanAdjustZoom);
-      document.getElementById('scanRedetectBtn').addEventListener('click', redetectCapturedDocument);
-      document.getElementById('scanRestoreBtn').addEventListener('click', restoreCapturedCorners);
       document.getElementById('scanApplyCropBtn').addEventListener('click', applyManualDocumentCrop);
       document.getElementById('scanUseFullBtn').addEventListener('click', useFullCapturedImage);
       document.getElementById('scanAdjustCancelBtn').addEventListener('click', cancelCapturedDocument);
@@ -1509,13 +1501,13 @@
         const corners = detected ? expandDocumentCorners(detectedCorners, canvas.width, canvas.height) : getCameraMarginCorners(canvas.width, canvas.height);
         stopDocumentDetection();
         const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
-        state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, initialCorners: corners.map(point => ({ ...point })), detected, dragging: -1 };
+        state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, detected, dragging: -1 };
         openCapturedDocumentAdjust();
         showToast(detected ? 'Documento capturado e alinhado' : 'Ajuste os cantos antes de continuar', !detected);
       } catch (error) {
         console.warn('Falha ao corrigir perspectiva:', error);
         const fallbackCorners = getCameraMarginCorners(canvas.width, canvas.height);
-        state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), filtered: null, corners: fallbackCorners, initialCorners: fallbackCorners.map(point => ({ ...point })), detected: false, dragging: -1 };
+        state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), filtered: null, corners: fallbackCorners, detected: false, dragging: -1 };
         openCapturedDocumentAdjust();
         showToast('Não foi possível corrigir automaticamente. Use o ajuste manual.', true);
       } finally {
@@ -1585,13 +1577,11 @@
       if (!pending) return;
       if (document.getElementById('scanPagePreviewModal').classList.contains('active')) closeModal('scanPagePreviewModal');
       showCameraChildModal('scanAdjustModal');
-      document.getElementById('scanAdjustZoom').value = 1;
       requestAnimationFrame(() => {
         const canvas = document.getElementById('scanAdjustCanvas');
         canvas.style.width = '';
         canvas.style.maxWidth = '100%';
         drawCapturedCornerEditor();
-        pending.editorBaseWidth = canvas.getBoundingClientRect().width;
       });
     }
 
@@ -1638,46 +1628,6 @@
       if (!pending) return;
       pending.dragging = -1;
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    function updateScanAdjustZoom(event) {
-      const pending = state.cameraScan.pending;
-      const canvas = document.getElementById('scanAdjustCanvas');
-      if (!pending || !canvas) return;
-      const baseWidth = pending.editorBaseWidth || canvas.getBoundingClientRect().width;
-      canvas.style.maxWidth = 'none';
-      canvas.style.width = `${Math.round(baseWidth * Number(event.target.value))}px`;
-    }
-
-    function detectCornersInStillCanvas(sourceCanvas) {
-      if (!state.cameraScan.cvReady) return null;
-      const analysis = document.createElement('canvas');
-      const scale = Math.min(1, 700 / sourceCanvas.width);
-      analysis.width = Math.round(sourceCanvas.width * scale); analysis.height = Math.round(sourceCanvas.height * scale);
-      analysis.getContext('2d').drawImage(sourceCanvas, 0, 0, analysis.width, analysis.height);
-      let src, gray, edges, contours, hierarchy, kernel;
-      try {
-        src = cv.imread(analysis); gray = new cv.Mat(); edges = new cv.Mat(); contours = new cv.MatVector(); hierarchy = new cv.Mat();
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY); cv.equalizeHist(gray, gray); cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0); cv.Canny(gray, edges, 30, 110); kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5)); cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel); cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-        const candidate = findBestDocumentCandidate(contours, analysis.width, analysis.height, scale);
-        return candidate.confidence >= 0.52 && candidate.points ? orderDocumentCorners(candidate.points) : null;
-      } finally { [src, gray, edges, contours, hierarchy, kernel].forEach(mat => { if (mat?.delete) mat.delete(); }); }
-    }
-
-    function redetectCapturedDocument() {
-      const pending = state.cameraScan.pending;
-      if (!pending) return;
-      try {
-        const corners = detectCornersInStillCanvas(pending.original);
-        if (!corners) return showToast('Nenhum documento foi detectado. Ajuste os cantos manualmente.', true);
-        pending.corners = constrainCornersToCameraMargin(corners, pending.original.width, pending.original.height); pending.initialCorners = pending.corners.map(point => ({ ...point })); drawCapturedCornerEditor();
-      } catch (error) { showToast('Falha ao detectar novamente: ' + error.message, true); }
-    }
-
-    function restoreCapturedCorners() {
-      const pending = state.cameraScan.pending;
-      if (!pending) return;
-      pending.corners = pending.initialCorners.map(point => ({ ...point })); drawCapturedCornerEditor();
     }
 
     function applyManualDocumentCrop() {
