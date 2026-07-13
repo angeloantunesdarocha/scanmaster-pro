@@ -1501,13 +1501,13 @@
         const corners = detected ? expandDocumentCorners(detectedCorners, canvas.width, canvas.height) : getCameraMarginCorners(canvas.width, canvas.height);
         stopDocumentDetection();
         const corrected = state.cameraScan.cvReady && detected ? applyDocumentPerspective(canvas, corners) : cloneCanvas(canvas);
-        state.cameraScan.pending = { original: canvas, corrected, filtered: null, corners, detected, dragging: -1 };
+        state.cameraScan.pending = { original: canvas, corrected, correctedCorners: corners.map(point => ({ ...point })), filtered: null, corners, detected, dragging: -1 };
         openCapturedDocumentAdjust();
         showToast(detected ? 'Documento capturado e alinhado' : 'Ajuste os cantos antes de continuar', !detected);
       } catch (error) {
         console.warn('Falha ao corrigir perspectiva:', error);
         const fallbackCorners = getCameraMarginCorners(canvas.width, canvas.height);
-        state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), filtered: null, corners: fallbackCorners, detected: false, dragging: -1 };
+        state.cameraScan.pending = { original: canvas, corrected: cloneCanvas(canvas), correctedCorners: null, filtered: null, corners: fallbackCorners, detected: false, dragging: -1 };
         openCapturedDocumentAdjust();
         showToast('Não foi possível corrigir automaticamente. Use o ajuste manual.', true);
       } finally {
@@ -1517,11 +1517,25 @@
       }
     }
 
-    function cloneCanvas(source) {
+    function cloneCanvas(source, metrics) {
+      const startedAt = performance.now();
       const canvas = document.createElement('canvas');
       canvas.width = source.width;
       canvas.height = source.height;
       canvas.getContext('2d').drawImage(source, 0, 0);
+      if (metrics) metrics.canvasCreationMs = (metrics.canvasCreationMs || 0) + performance.now() - startedAt;
+      return canvas;
+    }
+
+    function createScaledCanvas(source, maxDimension) {
+      const scale = Math.min(1, maxDimension / Math.max(source.width, source.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(source.width * scale));
+      canvas.height = Math.max(1, Math.round(source.height * scale));
+      const context = canvas.getContext('2d');
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
       return canvas;
     }
 
@@ -1537,21 +1551,34 @@
       }));
     }
 
-    function applyDocumentPerspective(sourceCanvas, corners) {
-      if (!state.cameraScan.cvReady || !corners || corners.length !== 4) return cloneCanvas(sourceCanvas);
+    function applyDocumentPerspective(sourceCanvas, corners, metrics) {
+      if (!state.cameraScan.cvReady || !corners || corners.length !== 4) return cloneCanvas(sourceCanvas, metrics);
+      let stepStartedAt = performance.now();
       const ordered = orderDocumentCorners(corners);
       const width = Math.max(1, Math.round(Math.max(pointDistance(ordered[0], ordered[1]), pointDistance(ordered[3], ordered[2]))));
       const height = Math.max(1, Math.round(Math.max(pointDistance(ordered[0], ordered[3]), pointDistance(ordered[1], ordered[2]))));
+      if (metrics) metrics.geometryMs = performance.now() - stepStartedAt;
       let src, dst, sourcePoints, destinationPoints, transform;
       try {
-        src = cv.imread(sourceCanvas); dst = new cv.Mat();
+        stepStartedAt = performance.now();
+        src = cv.imread(sourceCanvas);
+        if (metrics) metrics.imageReadMs = performance.now() - stepStartedAt;
+        stepStartedAt = performance.now();
+        dst = new cv.Mat();
         sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, ordered.flatMap(point => [point.x, point.y]));
         destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, width - 1, 0, width - 1, height - 1, 0, height - 1]);
+        if (metrics) metrics.canvasSetupMs = performance.now() - stepStartedAt;
+        stepStartedAt = performance.now();
         transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
+        if (metrics) metrics.perspectiveMatrixMs = performance.now() - stepStartedAt;
+        stepStartedAt = performance.now();
         cv.warpPerspective(src, dst, transform, new cv.Size(width, height), cv.INTER_CUBIC, cv.BORDER_REPLICATE);
+        if (metrics) metrics.perspectiveWarpMs = performance.now() - stepStartedAt;
+        stepStartedAt = performance.now();
         const output = document.createElement('canvas');
         output.width = width; output.height = height;
         cv.imshow(output, dst);
+        if (metrics) metrics.canvasCreationMs = (metrics.canvasCreationMs || 0) + performance.now() - stepStartedAt;
         return output;
       } finally {
         [src, dst, sourcePoints, destinationPoints, transform].forEach(mat => { if (mat && typeof mat.delete === 'function') mat.delete(); });
@@ -1581,6 +1608,7 @@
         const canvas = document.getElementById('scanAdjustCanvas');
         canvas.style.width = '';
         canvas.style.maxWidth = '100%';
+        if (!pending.editorPreview) pending.editorPreview = createScaledCanvas(pending.original, 1400);
         drawCapturedCornerEditor();
       });
     }
@@ -1589,20 +1617,25 @@
       const pending = state.cameraScan.pending;
       const canvas = document.getElementById('scanAdjustCanvas');
       if (!pending || !canvas) return;
-      canvas.width = pending.original.width; canvas.height = pending.original.height;
+      pending.editorDrawFrame = 0;
+      const preview = pending.editorPreview || pending.original;
+      canvas.width = preview.width; canvas.height = preview.height;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(pending.original, 0, 0);
+      ctx.drawImage(preview, 0, 0);
+      const scaleX = canvas.width / pending.original.width;
+      const scaleY = canvas.height / pending.original.height;
       ctx.strokeStyle = '#00b0ff'; ctx.fillStyle = '#00b0ff'; ctx.lineWidth = Math.max(4, canvas.width / 250);
       ctx.beginPath();
-      pending.corners.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      pending.corners.forEach((point, index) => index ? ctx.lineTo(point.x * scaleX, point.y * scaleY) : ctx.moveTo(point.x * scaleX, point.y * scaleY));
       ctx.closePath(); ctx.stroke();
-      pending.corners.forEach(point => { ctx.beginPath(); ctx.arc(point.x, point.y, Math.max(10, canvas.width / 90), 0, Math.PI * 2); ctx.fill(); });
+      pending.corners.forEach(point => { ctx.beginPath(); ctx.arc(point.x * scaleX, point.y * scaleY, Math.max(10, canvas.width / 90), 0, Math.PI * 2); ctx.fill(); });
     }
 
     function pointerToCapturedPoint(event) {
       const canvas = document.getElementById('scanAdjustCanvas');
       const rect = canvas.getBoundingClientRect();
-      return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height };
+      const pending = state.cameraScan.pending;
+      return { x: (event.clientX - rect.left) * pending.original.width / rect.width, y: (event.clientY - rect.top) * pending.original.height / rect.height };
     }
 
     function startCornerDrag(event) {
@@ -1620,27 +1653,121 @@
       if (!pending || pending.dragging < 0) return;
       const point = pointerToCapturedPoint(event);
       pending.corners[pending.dragging] = { x: Math.max(0, Math.min(pending.original.width, point.x)), y: Math.max(0, Math.min(pending.original.height, point.y)) };
-      drawCapturedCornerEditor();
+      if (!pending.editorDrawFrame) pending.editorDrawFrame = requestAnimationFrame(drawCapturedCornerEditor);
     }
 
     function stopCornerDrag(event) {
       const pending = state.cameraScan.pending;
       if (!pending) return;
       pending.dragging = -1;
+      if (pending.editorDrawFrame) {
+        cancelAnimationFrame(pending.editorDrawFrame);
+        pending.editorDrawFrame = 0;
+        drawCapturedCornerEditor();
+      }
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
-    function applyManualDocumentCrop() {
-      const pending = state.cameraScan.pending;
-      if (!pending) return;
-      try { pending.corrected = applyDocumentPerspective(pending.original, pending.corners); openCapturedDocumentPreview(); }
-      catch (error) { showToast('Não foi possível aplicar o recorte: ' + error.message, true); }
+    function waitForNextPaint() {
+      return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     }
 
-    function useFullCapturedImage() {
-      if (!state.cameraScan.pending) return;
-      state.cameraScan.pending.corrected = cloneCanvas(state.cameraScan.pending.original);
-      openCapturedDocumentPreview();
+    function cornersMatch(first, second, tolerance = 0.01) {
+      return Array.isArray(first) && Array.isArray(second) && first.length === second.length && first.every((point, index) =>
+        Math.abs(point.x - second[index].x) <= tolerance && Math.abs(point.y - second[index].y) <= tolerance
+      );
+    }
+
+    function releaseCanvas(canvas) {
+      if (!canvas) return;
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+
+    function resetCapturedPreviewResources(pending) {
+      if (!pending) return;
+      pending.previewRequestId = (pending.previewRequestId || 0) + 1;
+      if (pending.previewUrl) URL.revokeObjectURL(pending.previewUrl);
+      [pending.previewSource, pending.previewFiltered, pending.filtered].forEach(releaseCanvas);
+      pending.previewUrl = '';
+      pending.previewSource = null;
+      pending.previewFiltered = null;
+      pending.filtered = null;
+      pending.finalDataUrl = '';
+      pending.finalFilter = '';
+      const image = document.getElementById('scanPagePreviewImg');
+      if (image) image.removeAttribute('src');
+    }
+
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Não foi possível criar a pré-visualização.')), type, quality));
+    }
+
+    async function applyManualDocumentCrop() {
+      const pending = state.cameraScan.pending;
+      if (!pending || pending.isApplyingCrop) return;
+      const button = document.getElementById('scanApplyCropBtn');
+      const originalText = button.textContent;
+      const metrics = { startedAt: performance.now(), sourceWidth: pending.original.width, sourceHeight: pending.original.height };
+      const heapBefore = performance.memory?.usedJSHeapSize || 0;
+      pending.isApplyingCrop = true;
+      button.disabled = true;
+      button.textContent = 'Aplicando recorte...';
+      console.time('ScanMaster: Aplicar recorte');
+      try {
+        await waitForNextPaint();
+        metrics.feedbackMs = performance.now() - metrics.startedAt;
+        if (state.cameraScan.pending !== pending) return;
+
+        const transformStartedAt = performance.now();
+        const canReuse = Boolean(pending.corrected && cornersMatch(pending.corners, pending.correctedCorners));
+        const corrected = canReuse ? pending.corrected : applyDocumentPerspective(pending.original, pending.corners, metrics);
+        metrics.transformMs = performance.now() - transformStartedAt;
+        metrics.reusedPreviousCrop = canReuse;
+
+        const storageStartedAt = performance.now();
+        if (!canReuse && pending.corrected && pending.corrected !== pending.original) releaseCanvas(pending.corrected);
+        pending.corrected = corrected;
+        pending.correctedCorners = pending.corners.map(point => ({ ...point }));
+        resetCapturedPreviewResources(pending);
+        metrics.storageMs = performance.now() - storageStartedAt;
+
+        await openCapturedDocumentPreview(metrics);
+      } catch (error) {
+        showToast('Não foi possível aplicar o recorte: ' + error.message, true);
+      } finally {
+        metrics.totalMs = performance.now() - metrics.startedAt;
+        const memoryCanvases = new Set([pending.original, pending.corrected, pending.filtered, pending.editorPreview, pending.previewSource, pending.previewFiltered].filter(Boolean));
+        metrics.approxCanvasMemoryMB = Array.from(memoryCanvases).reduce((total, canvas) => total + canvas.width * canvas.height * 4, 0) / 1048576;
+        metrics.heapDeltaMB = heapBefore && performance.memory ? (performance.memory.usedJSHeapSize - heapBefore) / 1048576 : null;
+        window.__lastCropPerformance = metrics;
+        console.table(metrics);
+        console.timeEnd('ScanMaster: Aplicar recorte');
+        pending.isApplyingCrop = false;
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function useFullCapturedImage() {
+      const pending = state.cameraScan.pending;
+      if (!pending || pending.isUsingFullImage) return;
+      const button = document.getElementById('scanUseFullBtn');
+      pending.isUsingFullImage = true;
+      button.disabled = true;
+      try {
+        await waitForNextPaint();
+        resetCapturedPreviewResources(pending);
+        if (pending.corrected && pending.corrected !== pending.original) releaseCanvas(pending.corrected);
+        pending.corrected = pending.original;
+        pending.correctedCorners = null;
+        await openCapturedDocumentPreview();
+      } catch (error) {
+        showToast('Não foi possível usar a imagem completa: ' + error.message, true);
+      } finally {
+        pending.isUsingFullImage = false;
+        button.disabled = false;
+      }
     }
 
     function createFilteredDocumentCanvas(source, mode) {
@@ -1667,32 +1794,96 @@
       ctx.putImageData(image, 0, 0); return canvas;
     }
 
-    function openCapturedDocumentPreview() {
+    async function openCapturedDocumentPreview(metrics) {
       if (!state.cameraScan.pending) return;
+      const interfaceStartedAt = performance.now();
       if (document.getElementById('scanAdjustModal').classList.contains('active')) closeModal('scanAdjustModal');
       document.getElementById('scanFilterSelect').value = 'enhanced';
-      updateCapturedPreviewFilter();
       showCameraChildModal('scanPagePreviewModal');
+      if (metrics) metrics.interfaceUpdateMs = performance.now() - interfaceStartedAt;
+      await waitForNextPaint();
+      await showCapturedPreviewSource(metrics);
+      const backgroundStartedAt = performance.now();
+      const runFilter = () => updateCapturedPreviewFilter(metrics).finally(() => {
+        if (metrics) metrics.backgroundPreviewMs = performance.now() - backgroundStartedAt;
+      });
+      if ('requestIdleCallback' in window) requestIdleCallback(runFilter, { timeout: 200 });
+      else setTimeout(runFilter, 0);
     }
 
-    function updateCapturedPreviewFilter() {
+    async function showCapturedPreviewSource(metrics) {
       const pending = state.cameraScan.pending;
       if (!pending) return;
+      const requestId = (pending.previewRequestId || 0) + 1;
+      pending.previewRequestId = requestId;
+      const previewMaxDimension = Math.min(1200, Math.max(800, Math.round(900 * Math.min(2, window.devicePixelRatio || 1))));
+      let stepStartedAt = performance.now();
+      if (!pending.previewSource) pending.previewSource = createScaledCanvas(pending.corrected, previewMaxDimension);
+      if (metrics) metrics.thumbnailCreationMs = performance.now() - stepStartedAt;
+      stepStartedAt = performance.now();
+      const blob = await canvasToBlob(pending.previewSource, 'image/jpeg', cameraJpegQuality);
+      if (metrics) metrics.initialPreviewBlobMs = performance.now() - stepStartedAt;
+      if (state.cameraScan.pending !== pending || pending.previewRequestId !== requestId) return;
+      if (pending.previewUrl) URL.revokeObjectURL(pending.previewUrl);
+      pending.previewUrl = URL.createObjectURL(blob);
+      document.getElementById('scanPagePreviewImg').src = pending.previewUrl;
+    }
+
+    async function updateCapturedPreviewFilter(metrics) {
+      const pending = state.cameraScan.pending;
+      if (!pending) return;
+      const requestId = (pending.previewRequestId || 0) + 1;
+      pending.previewRequestId = requestId;
       try {
         const filter = document.getElementById('scanFilterSelect').value;
-        pending.filtered = createFilteredDocumentCanvas(pending.corrected, filter);
-        pending.finalDataUrl = pending.filtered.toDataURL(filter === 'document' ? 'image/png' : 'image/jpeg', cameraJpegQuality);
-        document.getElementById('scanPagePreviewImg').src = pending.finalDataUrl;
+        let stepStartedAt = performance.now();
+        if (!pending.previewSource) pending.previewSource = createScaledCanvas(pending.corrected, 900);
+        stepStartedAt = performance.now();
+        const previewFiltered = createFilteredDocumentCanvas(pending.previewSource, filter);
+        if (metrics) metrics.filterMs = performance.now() - stepStartedAt;
+        stepStartedAt = performance.now();
+        const blob = await canvasToBlob(previewFiltered, filter === 'document' ? 'image/png' : 'image/jpeg', cameraJpegQuality);
+        if (metrics) metrics.blobCreationMs = performance.now() - stepStartedAt;
+        if (state.cameraScan.pending !== pending || pending.previewRequestId !== requestId) {
+          releaseCanvas(previewFiltered);
+          return;
+        }
+        if (pending.previewUrl) URL.revokeObjectURL(pending.previewUrl);
+        releaseCanvas(pending.previewFiltered);
+        pending.previewFiltered = previewFiltered;
+        pending.previewUrl = URL.createObjectURL(blob);
+        document.getElementById('scanPagePreviewImg').src = pending.previewUrl;
       } catch (error) { showToast('Falha ao aplicar filtro: ' + error.message, true); }
     }
 
-    function addCapturedDocumentPage() {
+    async function addCapturedDocumentPage() {
       const pending = state.cameraScan.pending;
-      if (!pending?.filtered) return;
-      const dataUrl = pending.finalDataUrl || pending.filtered.toDataURL('image/jpeg', cameraJpegQuality);
-      state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter: document.getElementById('scanFilterSelect').value });
-      renderPages(); updateInfoCards(); releasePendingCameraCanvases();
-      returnToOpenCamera('scanPagePreviewModal'); showToast('Página adicionada ao scanner');
+      if (!pending?.corrected || pending.isAddingPage) return;
+      const button = document.getElementById('scanAddPageBtn');
+      const originalText = button.textContent;
+      pending.isAddingPage = true;
+      button.disabled = true;
+      try {
+        await waitForNextPaint();
+        const filter = document.getElementById('scanFilterSelect').value;
+        if (!pending.filtered || pending.finalFilter !== filter) {
+          releaseCanvas(pending.filtered);
+          pending.filtered = createFilteredDocumentCanvas(pending.corrected, filter);
+          pending.finalFilter = filter;
+          pending.finalDataUrl = '';
+        }
+        const dataUrl = pending.finalDataUrl || pending.filtered.toDataURL(filter === 'document' ? 'image/png' : 'image/jpeg', cameraJpegQuality);
+        pending.finalDataUrl = dataUrl;
+        state.pages.push({ id: Date.now(), dataUrl, rotation: 0, filter });
+        renderPages(); updateInfoCards(); releasePendingCameraCanvases();
+        returnToOpenCamera('scanPagePreviewModal'); showToast('Página adicionada ao scanner');
+      } catch (error) {
+        showToast('Não foi possível adicionar a página: ' + error.message, true);
+      } finally {
+        pending.isAddingPage = false;
+        button.disabled = false;
+        button.textContent = originalText;
+      }
     }
 
     function retakeCapturedDocument() {
@@ -1706,7 +1897,12 @@
 
     function releasePendingCameraCanvases() {
       const pending = state.cameraScan.pending;
-      if (pending) [pending.original, pending.corrected, pending.filtered].forEach(canvas => { if (canvas) { canvas.width = 1; canvas.height = 1; } });
+      if (pending) {
+        if (pending.editorDrawFrame) cancelAnimationFrame(pending.editorDrawFrame);
+        if (pending.previewUrl) URL.revokeObjectURL(pending.previewUrl);
+        const canvases = new Set([pending.original, pending.corrected, pending.filtered, pending.editorPreview, pending.previewSource, pending.previewFiltered].filter(Boolean));
+        canvases.forEach(releaseCanvas);
+      }
       state.cameraScan.pending = null;
       const preview = document.getElementById('scanPagePreviewImg');
       if (preview) preview.removeAttribute('src');
