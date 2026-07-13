@@ -199,6 +199,17 @@
     #convertPreviewFooter { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); background: var(--surface); z-index: 2; }
     #convertPreviewFooter .zoom-control { display: flex; align-items: center; gap: 8px; margin-right: auto; }
     #convertPreviewFooter .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    #convertPreviewModal.pdf-to-word-mode #convertPreviewFooter .zoom-control { display: none; }
+    #convertPreviewModal.pdf-to-word-mode #convertPreviewFooter .btn { flex: 1 1 150px; min-width: 0; }
+    .pdf-word-file-list { display: grid; gap: 16px; }
+    .pdf-word-file-item { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface-strong); }
+    .pdf-word-file-heading { display: flex; align-items: flex-start; gap: 12px; }
+    .pdf-word-file-heading > div { flex: 1; min-width: 0; }
+    .pdf-word-file-heading strong, .pdf-word-file-heading small { display: block; overflow-wrap: anywhere; }
+    .pdf-word-file-heading small { margin-top: 4px; color: var(--text-muted); }
+    .pdf-word-remove { min-width: 0; padding: 8px 12px; border-radius: 10px; color: var(--danger); background: var(--surface); border: 1px solid var(--border); }
+    .pdf-word-preview { display: block; width: 100%; min-width: 0 !important; height: 360px; min-height: 240px !important; margin-top: 12px; border: 0; border-radius: 12px; background: #fff; }
+    .pdf-word-empty { padding: 32px 18px; text-align: center; color: var(--text-muted); }
     @media (max-width: 620px) {
       #convertPreviewModal { padding: 6px; }
       #convertPreviewModal .modal-card { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); border-radius: 20px; }
@@ -207,6 +218,10 @@
       #convertPreviewFooter { flex-wrap: wrap; padding: 10px; }
       #convertPreviewFooter .zoom-control { width: 100%; }
       #convertPreviewFooter .btn { width: auto; flex: 1; min-width: 0; padding: 12px 10px; }
+      #convertPreviewModal.pdf-to-word-mode #convertPreviewFooter .btn { flex: 1 1 calc(50% - 5px); }
+      .pdf-word-file-heading { flex-wrap: wrap; }
+      .pdf-word-remove { width: 100%; }
+      .pdf-word-preview { height: 300px; }
     }
     .toast { position: fixed; left: 50%; top: 22px; transform: translateX(-50%) translateY(-120%); padding: 14px 20px; border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); z-index: 140; opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -641,7 +656,7 @@
   <input type="file" id="watermarkInput" accept=".pdf" hidden>
   <input type="file" id="ocrInput" accept=".pdf,image/*" hidden>
   <input type="file" id="wordToPdfInput" accept=".txt,.doc,.docx,.jpg,.jpeg,.png,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple hidden>
-  <input type="file" id="pdfToWordInput" accept=".pdf" hidden>
+  <input type="file" id="pdfToWordInput" accept=".pdf,application/pdf" multiple hidden>
   <input type="file" id="toJpgInput" accept=".pdf" hidden>
   <input type="file" id="toPdfInput" accept="image/*" multiple hidden>
 
@@ -660,6 +675,11 @@
       importedFiles: [],
       extractData: { pages: [], selected: [] },
       pendingWordConversion: { items: [], processing: false },
+      selectedPdfFiles: [],
+      previewData: [],
+      conversionResults: [],
+      isConverting: false,
+      conversionMode: '',
       settings: {
         theme: 'light',
         quality: 0.95,
@@ -854,7 +874,7 @@
       document.getElementById('wordToPdfBtn').addEventListener('click', () => document.getElementById('wordToPdfInput').click());
       document.getElementById('wordToPdfInput').addEventListener('change', event => handleWordToPdfFile(event.target.files));
       document.getElementById('pdfToWordBtn').addEventListener('click', () => document.getElementById('pdfToWordInput').click());
-      document.getElementById('pdfToWordInput').addEventListener('change', event => handlePdfToWordFile(event.target.files));
+      document.getElementById('pdfToWordInput').addEventListener('change', event => handlePdfToWordFiles(event.target.files));
       document.getElementById('closePreviewBtn').addEventListener('click', closePreview);
       document.getElementById('pdfQuality').addEventListener('change', saveSettings);
       document.getElementById('defaultName').addEventListener('input', saveSettings);
@@ -892,6 +912,7 @@
       if (closeBtn) closeBtn.addEventListener('click', () => closeModal('convertPreviewModal'));
       const downloadBtn = document.getElementById('convertDownloadBtn');
       if (downloadBtn) downloadBtn.addEventListener('click', () => {
+        if (state.conversionMode === 'pdfToWord') return downloadPdfToWordResults();
         if (state.lastConversion && state.lastConversion.blob) {
           const a = document.createElement('a');
           a.href = state.lastConversion.url;
@@ -899,11 +920,21 @@
           a.click();
         } else showToast('Nenhum arquivo para download', true);
       });
-      document.getElementById('convertActionBtn').addEventListener('click', convertPendingWordToPdf);
-      document.getElementById('clearWordFilesBtn').addEventListener('click', clearWordFiles);
-      document.getElementById('convertPreviewContent').addEventListener('click', handleWordFileListAction);
+      document.getElementById('convertActionBtn').addEventListener('click', () => {
+        if (state.conversionMode === 'pdfToWord') convertSelectedPdfsToWord();
+        else convertPendingWordToPdf();
+      });
+      document.getElementById('clearWordFilesBtn').addEventListener('click', () => {
+        if (state.conversionMode === 'pdfToWord') clearPdfToWordFiles();
+        else clearWordFiles();
+      });
+      document.getElementById('convertPreviewContent').addEventListener('click', event => {
+        if (state.conversionMode === 'pdfToWord') handlePdfToWordListAction(event);
+        else handleWordFileListAction(event);
+      });
       const reconvertBtn = document.getElementById('convertReconvertBtn');
       if (reconvertBtn) reconvertBtn.addEventListener('click', () => {
+        if (state.conversionMode === 'pdfToWord') return document.getElementById('pdfToWordInput').click();
         if (state.pendingWordConversion.items.length || state.lastConversion?.type === 'pdf') document.getElementById('wordToPdfInput').click();
         else if (state.lastConversion?.type === 'docx') document.getElementById('pdfToWordInput').click();
       });
@@ -1814,6 +1845,9 @@
     }
 
     function renderWordFileList() {
+      state.conversionMode = 'wordToPdf';
+      document.getElementById('convertPreviewModal').classList.remove('pdf-to-word-mode');
+      document.getElementById('convertPreviewModalTitle').textContent = 'Pré-visualização de Conversão';
       const items = state.pendingWordConversion.items;
       const content = document.getElementById('convertPreviewContent');
       content.innerHTML = `<div class="word-file-list">${items.map((item, index) => `
@@ -1989,81 +2023,240 @@
       }
     }
 
-    async function handlePdfToWordFile(files) {
-      if (!files.length) return;
-      const file = files[0];
-      showLoading('Convertendo PDF → Word...');
-      updateProgress(0.05);
+    function pdfFileKey(file) {
+      return `${file.name}::${file.size}::${file.lastModified}`;
+    }
+
+    function invalidatePdfToWordResults() {
+      state.conversionResults.forEach(result => {
+        if (result.url) URL.revokeObjectURL(result.url);
+      });
+      state.conversionResults = [];
+    }
+
+    async function handlePdfToWordFiles(files) {
+      const input = document.getElementById('pdfToWordInput');
+      const incoming = Array.from(files || []);
+      if (!incoming.length) {
+        input.value = '';
+        return;
+      }
+      const knownKeys = new Set(state.selectedPdfFiles.map(pdfFileKey));
+      const newFiles = [];
+      for (const file of incoming) {
+        if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+          showToast('Selecione apenas arquivos PDF.', true);
+          continue;
+        }
+        const key = pdfFileKey(file);
+        if (knownKeys.has(key)) {
+          showToast('Este arquivo já foi adicionado.', true);
+          continue;
+        }
+        knownKeys.add(key);
+        newFiles.push(file);
+      }
+      input.value = '';
+      if (!newFiles.length) return;
+
+      invalidatePdfToWordResults();
+      state.selectedPdfFiles.push(...newFiles);
+      state.previewData.push(...newFiles.map(file => ({
+        key: pdfFileKey(file),
+        pageCount: null,
+        url: URL.createObjectURL(file)
+      })));
+      state.conversionMode = 'pdfToWord';
+      renderPdfToWordPreview();
+      openModal('convertPreviewModal');
+
+      for (const file of newFiles) {
+        const key = pdfFileKey(file);
+        const preview = state.previewData.find(item => item.key === key);
+        if (!preview) continue;
+        try {
+          const loadingTask = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
+          const pdfDoc = await loadingTask.promise;
+          preview.pageCount = pdfDoc.numPages;
+          await pdfDoc.destroy();
+        } catch (error) {
+          preview.error = 'Não foi possível ler a quantidade de páginas.';
+        }
+        if (state.previewData.includes(preview)) renderPdfToWordPreview();
+      }
+    }
+
+    function renderPdfToWordPreview() {
+      state.conversionMode = 'pdfToWord';
+      const modal = document.getElementById('convertPreviewModal');
+      modal.classList.add('pdf-to-word-mode');
+      document.getElementById('convertPreviewModalTitle').textContent = 'PDF → Word';
+      const content = document.getElementById('convertPreviewContent');
+      content.style.zoom = '';
+      content.innerHTML = state.selectedPdfFiles.length ? `<div class="pdf-word-file-list">${state.selectedPdfFiles.map((file, index) => {
+        const key = pdfFileKey(file);
+        const preview = state.previewData.find(item => item.key === key);
+        const pages = preview?.pageCount ? `${preview.pageCount} página(s)` : (preview?.error || 'Contando páginas...');
+        return `<section class="pdf-word-file-item" data-pdf-word-key="${escapeHtml(key)}">
+          <div class="pdf-word-file-heading">
+            <div><strong>${index + 1}. ${escapeHtml(file.name)}</strong><small>${formatBytes(file.size)} · ${escapeHtml(pages)}</small></div>
+            <button type="button" class="pdf-word-remove" data-pdf-word-action="remove" ${state.isConverting ? 'disabled' : ''}>Remover</button>
+          </div>
+          ${preview?.url ? `<iframe class="pdf-word-preview" src="${preview.url}" title="Pré-visualização de ${escapeHtml(file.name)}"></iframe>` : ''}
+        </section>`;
+      }).join('')}</div>` : '<div class="pdf-word-empty">Nenhum PDF selecionado.</div>';
+
+      const convertedCount = state.conversionResults.length;
+      document.getElementById('convertPreviewSubtitle').textContent = convertedCount
+        ? `${convertedCount} arquivo(s) convertido(s). Resultado pronto para baixar.`
+        : `${state.selectedPdfFiles.length} arquivo(s) selecionado(s). A conversão só começa ao clicar em “Converter”.`;
+      const addButton = document.getElementById('convertReconvertBtn');
+      addButton.hidden = false;
+      addButton.textContent = 'Adicionar mais arquivos';
+      addButton.disabled = state.isConverting;
+      const clearButton = document.getElementById('clearWordFilesBtn');
+      clearButton.hidden = false;
+      clearButton.textContent = 'Limpar arquivos';
+      clearButton.disabled = state.isConverting || !state.selectedPdfFiles.length;
+      const convertButton = document.getElementById('convertActionBtn');
+      convertButton.hidden = false;
+      convertButton.disabled = state.isConverting || !state.selectedPdfFiles.length;
+      document.getElementById('convertDownloadBtn').disabled = state.isConverting || !convertedCount;
+    }
+
+    function handlePdfToWordListAction(event) {
+      const button = event.target.closest('[data-pdf-word-action="remove"]');
+      if (!button || state.isConverting) return;
+      const card = button.closest('[data-pdf-word-key]');
+      const key = card?.dataset.pdfWordKey;
+      const index = state.selectedPdfFiles.findIndex(file => pdfFileKey(file) === key);
+      if (index < 0) return;
+      state.selectedPdfFiles.splice(index, 1);
+      const previewIndex = state.previewData.findIndex(item => item.key === key);
+      if (previewIndex >= 0) {
+        URL.revokeObjectURL(state.previewData[previewIndex].url);
+        state.previewData.splice(previewIndex, 1);
+      }
+      invalidatePdfToWordResults();
+      renderPdfToWordPreview();
+    }
+
+    function clearPdfToWordFiles() {
+      if (state.isConverting) return;
+      state.previewData.forEach(preview => {
+        if (preview.url) URL.revokeObjectURL(preview.url);
+      });
+      invalidatePdfToWordResults();
+      state.selectedPdfFiles = [];
+      state.previewData = [];
+      state.isConverting = false;
+      document.getElementById('pdfToWordInput').value = '';
+      renderPdfToWordPreview();
+      showToast('Arquivos removidos.');
+    }
+
+    async function convertPdfFileToWord(file, fileIndex, totalFiles) {
+      const docxLib = window.docx || window.Docx;
+      if (!docxLib) throw new Error('A biblioteca necessária para gerar Word não foi carregada. Atualize a página e tente novamente.');
+      const { Document, Packer, Paragraph } = docxLib;
+      if (!Document || !Packer || !Paragraph) throw new Error('A biblioteca Word não está disponível no formato esperado.');
+
+      const pdfDoc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      const sections = [];
+      let fullHtml = '';
       try {
-        const docxLib = window.docx || window.Docx;
-        if (!docxLib) {
-          throw new Error('A biblioteca necessária para gerar Word não foi carregada. Atualize a página e tente novamente.');
-        }
-        const { Document, Packer, Paragraph } = docxLib;
-        if (!Document || !Packer || !Paragraph) {
-          throw new Error('A biblioteca Word não está disponível no formato esperado.');
-        }
-        const nameBase = (file.name || 'documento').replace(/\.pdf$/i, '');
-        const arrayBuffer = await file.arrayBuffer();
-        updateProgress(0.15);
-        const loadingText = document.getElementById('loadingText');
-        loadingText.textContent = 'Analisando PDF...';
-        const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const numPages = pdfDoc.numPages;
-        let fullHtml = '';
-        for (let i = 1; i <= numPages; i++) {
-          updateProgress(0.15 + 0.6 * (i / numPages));
-          loadingText.textContent = `Processando página ${i} de ${numPages}...`;
-          const page = await pdfDoc.getPage(i);
+        for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber++) {
+          document.getElementById('loadingText').textContent = `Convertendo arquivo ${fileIndex + 1} de ${totalFiles}... Página ${pageNumber} de ${pdfDoc.numPages}`;
+          updateProgress((fileIndex + (pageNumber / pdfDoc.numPages)) / totalFiles);
+          const page = await pdfDoc.getPage(pageNumber);
           const textContent = await page.getTextContent();
-          let pageText = '';
-          if (textContent && textContent.items && textContent.items.length > 0) {
-            const lines = [];
+          let lines = [];
+          if (textContent?.items?.length) {
             let currentY = null;
             let lineBuffer = '';
             for (const item of textContent.items) {
-              try {
-                const y = Math.round(item.transform[5]);
-                if (currentY === null) { currentY = y; }
-                if (Math.abs(y - currentY) > 6) { lines.push(lineBuffer); lineBuffer = item.str; currentY = y; }
-                else { lineBuffer += (lineBuffer ? ' ' : '') + item.str; }
-              } catch (e) { lineBuffer += (lineBuffer ? ' ' : '') + (item.str || ''); }
+              const y = Math.round(item.transform?.[5] || 0);
+              if (currentY === null) currentY = y;
+              if (Math.abs(y - currentY) > 6) {
+                if (lineBuffer.trim()) lines.push(lineBuffer.trim());
+                lineBuffer = item.str || '';
+                currentY = y;
+              } else {
+                lineBuffer += (lineBuffer ? ' ' : '') + (item.str || '');
+              }
             }
-            if (lineBuffer) lines.push(lineBuffer);
-            pageText = lines.map(l => `<p>${escapeHtml(l)}</p>`).join('\n');
+            if (lineBuffer.trim()) lines.push(lineBuffer.trim());
           } else {
-            loadingText.textContent = `Executando OCR na página ${i}...`;
+            document.getElementById('loadingText').textContent = `Convertendo arquivo ${fileIndex + 1} de ${totalFiles}... OCR da página ${pageNumber}`;
             const viewport = page.getViewport({ scale: 2 });
             const canvas = document.createElement('canvas');
             canvas.width = Math.round(viewport.width);
             canvas.height = Math.round(viewport.height);
-            const ctx = canvas.getContext('2d');
-            await page.render({ canvasContext: ctx, viewport }).promise;
-            const { data: { text } } = await Tesseract.recognize(canvas, 'por', { logger: m => {/* no-op */} });
-            pageText = `<div>${escapeHtml(text).replace(/\n/g,'<br>')}</div>`;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            const { data: { text } } = await Tesseract.recognize(canvas, 'por', { logger: () => {} });
+            lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
           }
-          fullHtml += `<div class="converted-page" style="padding:20px;border-bottom:1px solid var(--border);">${pageText}</div>`;
+          sections.push({ properties: {}, children: lines.map(line => new Paragraph(line)) });
+          fullHtml += `<div class="converted-page" style="padding:20px;border-bottom:1px solid var(--border);">${lines.map(line => `<p>${escapeHtml(line)}</p>`).join('')}</div>`;
         }
-        updateProgress(0.85);
-        const doc = new Document({ sections: [] });
-        const pages = fullHtml.split(/<div class="converted-page"[^>]*>/).filter(Boolean);
-        for (const pg of pages) {
-          const textOnly = pg.replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').trim();
-          const paras = textOnly.split(/\n+/).map(s => s.trim()).filter(Boolean);
-          const children = paras.map(p => new Paragraph(p));
-          doc.addSection({ properties: {}, children });
-        }
-        const blob = await Packer.toBlob(doc);
-        const url = URL.createObjectURL(blob);
-        state.lastConversion = { type: 'docx', blob, url, name: `${nameBase}.docx`, previewHtml: fullHtml };
-        hideLoading();
-        openConvertPreview('docx');
-      } catch (e) {
-        hideLoading();
-        console.error('PDF→Word error', e);
-        showToast('Erro na conversão: ' + (e && e.message ? e.message : e), true);
+      } finally {
+        await pdfDoc.destroy();
       }
-      document.getElementById('pdfToWordInput').value = '';
+      const blob = await Packer.toBlob(new Document({ sections }));
+      return { blob, fullHtml };
+    }
+
+    async function convertSelectedPdfsToWord() {
+      if (state.isConverting || !state.selectedPdfFiles.length) return;
+      const filesToConvert = state.selectedPdfFiles.slice();
+      invalidatePdfToWordResults();
+      state.isConverting = true;
+      renderPdfToWordPreview();
+      showLoading(`Convertendo arquivo 1 de ${filesToConvert.length}...`);
+      const usedNames = new Set();
+      try {
+        for (let index = 0; index < filesToConvert.length; index++) {
+          const file = filesToConvert[index];
+          document.getElementById('loadingText').textContent = `Convertendo arquivo ${index + 1} de ${filesToConvert.length}...`;
+          try {
+            const { blob, fullHtml } = await convertPdfFileToWord(file, index, filesToConvert.length);
+            const baseName = (file.name || 'documento').replace(/\.pdf$/i, '');
+            let name = `${baseName}.docx`;
+            let suffix = 2;
+            while (usedNames.has(name.toLowerCase())) name = `${baseName}-${suffix++}.docx`;
+            usedNames.add(name.toLowerCase());
+            state.conversionResults.push({ key: pdfFileKey(file), blob, url: URL.createObjectURL(blob), name, previewHtml: fullHtml });
+          } catch (error) {
+            console.error(`PDF→Word error (${file.name})`, error);
+            showToast(`${file.name}: ${error?.message || 'Falha durante a conversão.'}`, true);
+          }
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        if (!state.conversionResults.length) throw new Error('Nenhum arquivo pôde ser convertido.');
+        updateProgress(1);
+        showToast(`${state.conversionResults.length} arquivo(s) convertido(s).`);
+      } catch (error) {
+        console.error('PDF→Word error', error);
+        showToast('Erro na conversão: ' + (error?.message || error), true);
+      } finally {
+        state.isConverting = false;
+        hideLoading();
+        renderPdfToWordPreview();
+      }
+    }
+
+    function downloadPdfToWordResults() {
+      if (!state.conversionResults.length || state.isConverting) return showToast('Nenhum arquivo para download', true);
+      state.conversionResults.forEach((result, index) => {
+        setTimeout(() => {
+          const link = document.createElement('a');
+          link.href = result.url;
+          link.download = result.name;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }, index * 250);
+      });
     }
 
     function createTextPageDataUrl(text) {
