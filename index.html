@@ -114,10 +114,6 @@
     .setting-row { display: grid; gap: 10px; }
     .setting-row label { font-size: 14px; color: var(--text-muted); }
     .setting-row input, .setting-row select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text); }
-    .switch { position: relative; width: 54px; height: 30px; border-radius: 999px; background: rgba(93,49,200,0.12); }
-    .switch input { opacity:0; width:100%; height:100%; margin:0; position:absolute; cursor:pointer; }
-    .switch-slider { position:absolute; top:4px; left:4px; width:22px; height:22px; border-radius:50%; background:#fff; transition: transform 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
-    .switch input:checked + .switch-slider { transform: translateX(24px); }
     .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; height: 92px; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-around; padding: 0 16px; box-shadow: 0 -18px 40px rgba(0,0,0,0.08); }
     .nav-btn { flex:1; max-width: 180px; background: transparent; color: var(--text); display: grid; place-items: center; border-radius: 20px; padding: 12px 8px; transition: background 0.2s ease, transform 0.2s ease; }
     .nav-btn.active { background: rgba(255,255,255,0.22); color: #fff; transform: translateY(-2px); box-shadow: 0 16px 34px rgba(93,49,200,0.12); }
@@ -379,13 +375,6 @@
         <div class="settings-grid">
           <div class="settings-card">
             <div class="setting-row">
-              <label for="themeSwitch">Tema</label>
-              <label class="switch">
-                <input type="checkbox" id="themeSwitch">
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-            <div class="setting-row">
               <label for="pdfQuality">Qualidade do PDF</label>
               <select id="pdfQuality">
                 <option value="0.6">Baixa</option>
@@ -404,13 +393,6 @@
                 <option value="letter">Carta</option>
                 <option value="auto">Automático</option>
               </select>
-            </div>
-            <div class="setting-row">
-              <label for="watermarkToggle">Marca d'água</label>
-              <label class="switch">
-                <input type="checkbox" id="watermarkToggle">
-                <span class="switch-slider"></span>
-              </label>
             </div>
           </div>
           <div class="settings-card">
@@ -685,8 +667,7 @@
         theme: 'light',
         quality: 0.95,
         defaultName: 'documento_scan',
-        pageSize: 'a4',
-        watermark: false
+        pageSize: 'a4'
       }
     ,
     watermarkConfig: {
@@ -877,7 +858,6 @@
       document.getElementById('pdfQuality').addEventListener('change', saveSettings);
       document.getElementById('defaultName').addEventListener('input', saveSettings);
       document.getElementById('pageSize').addEventListener('change', saveSettings);
-      document.getElementById('watermarkToggle').addEventListener('change', saveSettings);
       document.getElementById('mergeInput').addEventListener('change', mergePDFs);
       document.getElementById('compressInput').addEventListener('change', compressPDF);
       document.getElementById('extractInput').addEventListener('change', extractPages);
@@ -987,8 +967,6 @@
       document.getElementById('pdfQuality').value = state.settings.quality;
       document.getElementById('defaultName').value = state.settings.defaultName;
       document.getElementById('pageSize').value = state.settings.pageSize;
-      document.getElementById('watermarkToggle').checked = state.settings.watermark;
-      document.getElementById('themeSwitch').checked = state.settings.theme === 'dark';
       document.getElementById('qualityLabel').textContent = state.settings.quality === 0.95 ? 'Alta' : state.settings.quality === 0.8 ? 'Média' : 'Baixa';
       document.getElementById('pageSizeLabel').textContent = pageSizeNames[state.settings.pageSize];
     }
@@ -997,8 +975,6 @@
       state.settings.quality = parseFloat(document.getElementById('pdfQuality').value);
       state.settings.defaultName = document.getElementById('defaultName').value.trim() || 'documento_scan';
       state.settings.pageSize = document.getElementById('pageSize').value;
-      state.settings.watermark = document.getElementById('watermarkToggle').checked;
-      state.settings.theme = document.getElementById('themeSwitch').checked ? 'dark' : 'light';
       localStorage.setItem(settingsKey, JSON.stringify(state.settings));
       document.getElementById('qualityLabel').textContent = state.settings.quality === 0.95 ? 'Alta' : state.settings.quality === 0.8 ? 'Média' : 'Baixa';
       document.getElementById('pageSizeLabel').textContent = pageSizeNames[state.settings.pageSize];
@@ -1012,7 +988,7 @@
     }
 
     function toggleTheme() {
-      document.getElementById('themeSwitch').checked = !document.getElementById('themeSwitch').checked;
+      state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
       saveSettings();
     }
 
