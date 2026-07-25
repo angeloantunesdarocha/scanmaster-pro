@@ -1,7 +1,8 @@
-const CACHE_VERSION = 'scanmaster-v2-2026-07-25';
+const CACHE_VERSION = 'scanmaster-v2-1-entrega-certa';
 const APP_SHELL = [
   './',
   './index.html',
+  './entrega-certa.html',
   './manifest.json',
   './scanmaster-icon.png'
 ];
@@ -25,15 +26,20 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          const copy = response.clone();
-          void caches.open(CACHE_VERSION).then(cache => cache.put('./index.html', copy));
-          return response;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request);
+        if (response.ok) {
+          const cache = await caches.open(CACHE_VERSION);
+          await cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch {
+        return await caches.match(event.request)
+          || await caches.match(url.pathname.endsWith('entrega-certa') ? './entrega-certa.html' : url.pathname)
+          || await caches.match('./index.html');
+      }
+    })());
     return;
   }
 
@@ -45,7 +51,7 @@ self.addEventListener('fetch', event => {
           void caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
         }
         return response;
-      });
+      }).catch(() => cached);
       return cached || network;
     })
   );
