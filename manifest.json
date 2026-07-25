@@ -1,7 +1,7 @@
 {
   "name": "ScanMaster Pro",
   "short_name": "ScanMaster",
-  "description": "Scanner moderno para documentos e PDF",
+  "description": "Scanner e preparador inteligente de documentos para envio",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -17,6 +17,21 @@
       "src": "./scanmaster-icon.png",
       "sizes": "512x512",
       "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Entrega Certa",
+      "short_name": "Entrega Certa",
+      "description": "Preparar e validar documentos para envio",
+      "url": "/entrega-certa.html",
+      "icons": [
+        {
+          "src": "./scanmaster-icon.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
