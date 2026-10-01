@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#6d3df5">
-  <title>ScanMaster Pro</title>
+  <title>ScanMaster Pro — Ferramentas para PDF</title>
+  <meta name="description" content="Organize, converta e edite PDFs no navegador. Ferramentas rápidas com processamento local e scanner de documentos.">
   <link rel="icon" type="image/png" href="./scanmaster-icon.png">
   <link rel="apple-touch-icon" href="./scanmaster-icon.png">
   <link rel="manifest" href="./manifest.json">
@@ -13,6 +14,8 @@
   <meta name="apple-mobile-web-app-title" content="ScanMaster Pro">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js" defer></script>
   <script src="https://unpkg.com/mammoth/mammoth.browser.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
@@ -57,10 +60,10 @@
     }
     * { box-sizing:border-box; }
     html, body { margin:0; min-height:100%; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top, rgba(93,49,200,0.10), transparent 28%), var(--bg); color: var(--text); }
-    body { padding-bottom: 112px; }
+    body { padding-bottom: 36px; }
     button, input, select { font: inherit; }
     button { border: none; cursor: pointer; }
-    .app { max-width: 1120px; margin: 0 auto; padding: 20px 20px 0; }
+    .app { max-width: 1240px; margin: 0 auto; padding: 20px 24px 0; }
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
     .brand { display: flex; align-items: center; gap: 14px; }
     .brand-mark { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(135deg,#5d31c8,#7b5dff); color:#fff; font-weight:700; font-size:22px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
@@ -103,22 +106,45 @@
     #extractModal .page-card .page-info strong { color: var(--text); }
     .page-card .page-remove { width: 34px; height: 34px; border-radius: 12px; border:none; background: rgba(0,0,0,0.6); color:#fff; font-size:16px; display:flex; align-items:center; justify-content:center; }
     .page-card.dragging { opacity: 0.55; }
+    .organize-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); gap: 14px; padding: 18px; }
+    .organize-card { position: relative; padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-strong); cursor: grab; }
+    .organize-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; display: block; background: white; border-radius: 8px; }
+    .organize-card strong { display: block; padding: 8px 4px 2px; text-align: center; font-size: 13px; }
+    .organize-card.dragging { opacity: .45; }
+    .organize-card.over { outline: 2px solid var(--primary); }
+    .organize-remove { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 9px; color: white; background: rgba(30,25,40,.78); }
     .page-placeholder { min-height: 160px; border: 2px dashed var(--border); display: grid; place-items: center; border-radius: 24px; color: var(--text-muted); }
-    .tool-grid { padding: 20px; display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 16px; }
-    .tool-card { padding: 22px; display: grid; gap: 14px; min-height: 170px; }
+    .tools-heading { display: grid; gap: 10px; padding: 18px 0 4px; }
+    .tools-heading h1 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.04em; }
+    .tools-heading p { max-width: 720px; margin: 0; color: var(--text-muted); line-height: 1.6; }
+    .tools-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 4px; }
+    .tool-search { flex: 1 1 280px; max-width: 520px; position: relative; }
+    .tool-search input { width: 100%; min-height: 48px; padding: 12px 16px 12px 44px; border: 1px solid var(--border); border-radius: 14px; color: var(--text); background: var(--surface); box-shadow: 0 5px 20px rgba(30,36,70,.04); }
+    .tool-search::before { content: '⌕'; position: absolute; left: 15px; top: 7px; font-size: 26px; color: var(--text-muted); }
+    .tool-categories { display: flex; flex-wrap: wrap; gap: 8px; }
+    .category-btn { padding: 10px 14px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; }
+    .category-btn.active { color: #fff; background: var(--primary); border-color: var(--primary); }
+    .privacy-note { display: flex; align-items: center; gap: 10px; padding: 14px 16px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+    .tool-grid { padding: 8px 0 28px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; background: transparent; border: 0; box-shadow: none; }
+    .tool-card { padding: 20px; display: grid; gap: 12px; min-height: 202px; border-radius: 18px; box-shadow: 0 6px 24px rgba(28,34,68,.055); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .tool-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(28,34,68,.11); border-color: rgba(93,49,200,.3); }
+    .tool-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; font-size: 21px; color: var(--primary); background: var(--primary-soft); }
     .tool-card h3 { margin:0; font-size: 16px; }
-    .tool-card p { margin:0; color: var(--text-muted); line-height:1.6; }
+    .tool-card p { margin:0; color: var(--text-muted); line-height:1.5; font-size: 13px; }
     .tool-card button { width: 100%; }
+    .tools-empty { display: none; padding: 32px 16px; text-align: center; color: var(--text-muted); background: var(--surface); border: 1px dashed var(--border); border-radius: 18px; }
+    .tool-section-title { grid-column: 1 / -1; margin: 12px 0 -4px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
     .settings-grid { padding: 20px; display: grid; gap: 18px; }
     .settings-card { padding: 22px; display: grid; gap: 18px; }
     .setting-row { display: grid; gap: 10px; }
     .setting-row label { font-size: 14px; color: var(--text-muted); }
     .setting-row input, .setting-row select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-strong); color: var(--text); }
-    .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; height: 92px; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-around; padding: 0 16px; box-shadow: 0 -18px 40px rgba(0,0,0,0.08); }
-    .nav-btn { flex:1; max-width: 180px; background: transparent; color: var(--text); display: grid; place-items: center; border-radius: 20px; padding: 12px 8px; transition: background 0.2s ease, transform 0.2s ease; }
-    .nav-btn.active { background: rgba(255,255,255,0.22); color: #fff; transform: translateY(-2px); box-shadow: 0 16px 34px rgba(93,49,200,0.12); }
+    .bottom-nav { position: sticky; top: 8px; height: auto; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 6px; box-shadow: 0 5px 18px rgba(0,0,0,0.06); border-radius: 16px; z-index: 100; margin: 12px 0 20px; }
+    .nav-btn { flex: 0 0 auto; min-width: 104px; max-width: 180px; background: transparent; color: var(--text); display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 12px; padding: 11px 16px; transition: background 0.2s ease, transform 0.2s ease; }
+    .nav-btn.active { background: var(--primary-soft); color: var(--primary); transform: none; box-shadow: none; font-weight: 650; }
     .nav-btn:hover:not(.active) { background: rgba(93,49,200,0.06); }
-    .nav-btn span { font-size: 13px; margin-top: 8px; display:block; }
+    .nav-btn span { font-size: 17px; display:block; }
+    .tool-card[hidden] { display: none; }
     .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(10,8,20,0.72); z-index: 120; overflow-x: hidden; }
     .modal.active { display: flex; }
     .modal-card { width: min(820px, calc(100vw - 24px)); max-width: 100%; max-height: 90vh; overflow-y: auto; overflow-x: hidden; border-radius: 32px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; box-sizing: border-box; }
@@ -240,12 +266,21 @@
     @keyframes fadeIn { from {opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 900px) {
+      .tool-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
       .status-card { grid-template-columns: 1fr; }
       .hero-card, .settings-card, .tool-grid, .scanner-card { padding: 18px; }
-      .bottom-nav { height: 96px; padding: 0 12px; }
+      .bottom-nav { height: auto; padding: 6px; }
     }
     @media (max-width: 620px) {
       .app { padding: 14px 14px 0; }
+      body { padding-bottom: 126px; }
+      .tool-grid { grid-template-columns: 1fr; gap: 10px; }
+      .tool-card { min-height: 0; grid-template-columns: auto 1fr; align-items: center; padding: 16px; }
+      .tool-card p { grid-column: 2; }
+      .tool-card button { grid-column: 1 / -1; }
+      .tools-toolbar { align-items: stretch; }
+      .tool-categories { flex-wrap: nowrap; overflow-x: auto; padding: 2px 0 7px; }
+      .category-btn { white-space: nowrap; }
       body { padding-bottom: 126px; }
       .topbar { flex-wrap: wrap; gap: 12px; }
       .brand-title strong { font-size: 16px; }
@@ -256,6 +291,9 @@
       .camera-actions { gap: 6px; }
       .cam-action { width: 46px; height: 46px; }
       .camera-auto-control { max-width: 112px; line-height: 1.2; }
+      .bottom-nav { position: fixed; top: auto; left: 0; right: 0; bottom: 0; height: 82px; justify-content: space-around; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); margin: 0; border-radius: 18px 18px 0 0; border: 0; border-top: 1px solid var(--border); box-shadow: 0 -10px 28px rgba(0,0,0,.08); }
+      .nav-btn { flex: 1; min-width: 0; max-width: none; display: grid; gap: 3px; padding: 8px 5px; font-size: 12px; }
+      .nav-btn span { font-size: 17px; }
     }
     /* Watermark preview styles */
     .wm-preview-container { display:flex; justify-content:center; align-items:center; padding:12px 6px 18px; }
@@ -279,13 +317,18 @@
         <div class="brand-mark">S</div>
         <div class="brand-title">
           <strong>ScanMaster Pro</strong>
-          <span>Scanner moderno e funcional</span>
+          <span>Ferramentas PDF e scanner</span>
         </div>
       </div>
       <button id="themeToggle" class="icon-btn" aria-label="Alternar tema">🌙</button>
     </header>
+    <nav class="bottom-nav" aria-label="Navegação principal">
+      <button class="nav-btn active" data-target="toolsSection"><span>▧</span>PDF</button>
+      <button class="nav-btn" data-target="scannerSection"><span>📷</span>Scanner</button>
+      <button class="nav-btn" data-target="settingsSection"><span>⚙️</span>Ajustes</button>
+    </nav>
     <div class="content">
-      <section id="scannerSection" class="page active">
+      <section id="scannerSection" class="page">
         <div class="status-card">
           <div class="status-block">
             <strong>Páginas capturadas</strong>
@@ -316,59 +359,108 @@
         </div>
         <div id="pagesGrid" class="page-grid"></div>
       </section>
-      <section id="toolsSection" class="page">
+      <section id="toolsSection" class="page active">
+        <div class="tools-heading">
+          <h1>Ferramentas para todos os seus PDFs</h1>
+          <p>Organize, converta e prepare documentos em poucos passos. Seus arquivos são processados no navegador.</p>
+        </div>
+        <div class="tools-toolbar">
+          <label class="tool-search"><input id="toolSearch" type="search" placeholder="Buscar uma ferramenta…" autocomplete="off" aria-label="Buscar ferramentas PDF"></label>
+          <div class="tool-categories" role="group" aria-label="Filtrar por categoria">
+            <button class="category-btn active" type="button" data-category-filter="all" aria-pressed="true">Todas</button>
+            <button class="category-btn" type="button" data-category-filter="organize" aria-pressed="false">Organizar PDF</button>
+            <button class="category-btn" type="button" data-category-filter="convert" aria-pressed="false">Converter PDF</button>
+            <button class="category-btn" type="button" data-category-filter="edit" aria-pressed="false">Editar PDF</button>
+          </div>
+        </div>
+        <div class="privacy-note"><span aria-hidden="true">🔒</span><span>Processamento local no navegador. PDF grande pode usar mais memória e demorar alguns segundos.</span></div>
         <div class="tool-grid">
-          <div class="tool-card">
+          <div class="tool-card" data-category="organize" data-search="mesclar juntar combinar combinar pdf merge">
+            <span class="tool-icon" aria-hidden="true">▧</span>
             <h3>Mesclar PDFs</h3>
             <p>Junte múltiplos arquivos em um único PDF.</p>
             <button type="button" class="btn btn-secondary" id="mergeBtn">Selecionar PDFs</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="edit" data-search="comprimir compactar reduzir tamanho compressão">
+            <span class="tool-icon" aria-hidden="true">⇲</span>
             <h3>Comprimir PDF</h3>
-            <p>Reduza o tamanho do arquivo para envio rápido.</p>
+            <p>Recompacte páginas como imagens. O tamanho final depende do PDF original.</p>
             <button type="button" class="btn btn-secondary" id="compressBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="organize" data-search="extrair páginas selecionar intervalo split dividir">
+            <span class="tool-icon" aria-hidden="true">▤</span>
             <h3>Extrair Páginas</h3>
             <p>Extraia páginas específicas de um PDF.</p>
             <button type="button" class="btn btn-secondary" id="extractBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="organize" data-search="girar rotacionar orientação rotate">
+            <span class="tool-icon" aria-hidden="true">↻</span>
             <h3>Rotacionar PDF</h3>
             <p>Gire o PDF inteiro em 90°, 180° ou 270°.</p>
             <button type="button" class="btn btn-secondary" id="rotateBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="edit" data-search="marca d'água watermark texto confidencial">
+            <span class="tool-icon" aria-hidden="true">✎</span>
             <h3>Marca d'água</h3>
             <p>Adicione texto visível em todas as páginas.</p>
             <button type="button" class="btn btn-secondary" id="watermarkBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="edit" data-search="ocr texto reconhecer extrair digitalizar imagem">
+            <span class="tool-icon" aria-hidden="true">⌕</span>
             <h3>OCR Texto</h3>
             <p>Extraia texto de imagens ou PDFs.</p>
             <button type="button" class="btn btn-secondary" id="ocrBtn">Selecionar arquivo</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="convert" data-search="pdf jpg jpeg imagem exportar">
+            <span class="tool-icon" aria-hidden="true">▧</span>
             <h3>PDF → JPG</h3>
-            <p>Converta páginas de PDF em imagens JPG.</p>
+            <p>Baixe todas as páginas em um único arquivo ZIP de imagens JPG.</p>
             <button type="button" class="btn btn-secondary" id="toJpgBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="convert" data-search="word docx doc converter converter pdf">
+            <span class="tool-icon" aria-hidden="true">W</span>
             <h3>Word → PDF</h3>
             <p>Converta documentos Word em PDF preservando a formatação.</p>
             <button type="button" class="btn btn-secondary" id="wordToPdfBtn">Selecionar Word</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="convert" data-search="pdf word docx exportar editar converter">
+            <span class="tool-icon" aria-hidden="true">W</span>
             <h3>PDF → Word</h3>
-            <p>Converta PDFs em documentos Word editáveis.</p>
+            <p>Reconstrua o texto do PDF em um documento Word editável.</p>
             <button type="button" class="btn btn-secondary" id="pdfToWordBtn">Selecionar PDF</button>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" data-category="convert" data-search="imagem jpg png foto criar pdf">
+            <span class="tool-icon" aria-hidden="true">▣</span>
             <h3>Imagem → PDF</h3>
             <p>Transforme suas fotos em um documento PDF.</p>
             <button type="button" class="btn btn-secondary" id="toPdfBtn">Selecionar imagens</button>
           </div>
+          <div class="tool-card" data-category="organize" data-search="organizar páginas reordenar remover excluir reorganizar">
+            <span class="tool-icon" aria-hidden="true">☷</span>
+            <h3>Organizar páginas</h3>
+            <p>Reordene páginas ou remova as que não precisa.</p>
+            <button type="button" class="btn btn-secondary" id="organizeBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card" data-category="organize" data-search="dividir separar split intervalo páginas">
+            <span class="tool-icon" aria-hidden="true">⫽</span>
+            <h3>Dividir PDF</h3>
+            <p>Salve um intervalo de páginas como novo arquivo.</p>
+            <button type="button" class="btn btn-secondary" id="splitBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card" data-category="edit" data-search="número numerar páginas page number">
+            <span class="tool-icon" aria-hidden="true">#</span>
+            <h3>Números de página</h3>
+            <p>Numere as páginas com posição e início configuráveis.</p>
+            <button type="button" class="btn btn-secondary" id="pageNumbersBtn">Selecionar PDF</button>
+          </div>
+          <div class="tool-card" data-category="edit" data-search="assinar assinatura sign rubrica manuscrita">
+            <span class="tool-icon" aria-hidden="true">✍</span>
+            <h3>Assinar PDF</h3>
+            <p>Desenhe uma assinatura e aplique nas páginas desejadas.</p>
+            <button type="button" class="btn btn-secondary" id="signatureBtn">Selecionar PDF</button>
+          </div>
         </div>
+        <div class="tools-empty" id="toolsEmpty" role="status">Nenhuma ferramenta encontrada. Tente outra busca ou categoria.</div>
         <div class="file-list" id="importedList"></div>
       </section>
       <section id="settingsSection" class="page">
@@ -404,12 +496,6 @@
       </section>
     </div>
   </div>
-  <nav class="bottom-nav">
-    <button class="nav-btn active" data-target="scannerSection"><span>📷</span>Scanner</button>
-    <button class="nav-btn" data-target="toolsSection"><span>🛠️</span>Ferramentas</button>
-    <button class="nav-btn" data-target="settingsSection"><span>⚙️</span>Ajustes</button>
-  </nav>
-
   <div class="modal" id="cameraModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
     <div class="modal-card">
       <div class="modal-header">
@@ -622,6 +708,68 @@
               </div>
             </div>
 
+  <div class="modal" id="organizeModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="organizeModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div><p class="modal-title" id="organizeModalTitle">Organizar páginas</p><span style="color:var(--text-muted);font-size:13px;">Arraste as páginas para reorganizar ou remova as que não precisa.</span></div>
+        <button type="button" class="modal-close" id="closeOrganizeBtn" aria-label="Fechar organizador">✕</button>
+      </div>
+      <div class="organize-grid" id="organizeGrid"></div>
+      <div class="scan-workflow-footer">
+        <button type="button" class="btn btn-secondary" id="cancelOrganizeBtn">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="saveOrganizedPdfBtn">Baixar PDF organizado</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="splitModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="splitModalTitle">
+    <div class="modal-card" style="max-width:560px;">
+      <div class="modal-header"><div><p class="modal-title" id="splitModalTitle">Dividir PDF</p><span id="splitPageCount" style="color:var(--text-muted);font-size:13px;"></span></div><button type="button" class="modal-close" id="closeSplitBtn" aria-label="Fechar divisão">✕</button></div>
+      <div class="preview-meta">
+        <label class="setting-row">Página inicial<input id="splitStart" type="number" min="1" value="1"></label>
+        <label class="setting-row">Página final<input id="splitEnd" type="number" min="1" value="1"></label>
+        <p style="margin:0;color:var(--text-muted);font-size:13px;">O intervalo informado será preservado em PDF, com texto e conteúdo vetorial.</p>
+      </div>
+      <div class="scan-workflow-footer"><button type="button" class="btn btn-secondary" id="cancelSplitBtn">Cancelar</button><button type="button" class="btn btn-primary" id="downloadSplitBtn">Baixar intervalo</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="rotatePdfModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="rotatePdfTitle">
+    <div class="modal-card" style="max-width:500px;">
+      <div class="modal-header"><div><p class="modal-title" id="rotatePdfTitle">Rotacionar PDF</p><span id="rotatePdfName" style="color:var(--text-muted);font-size:13px;"></span></div><button type="button" class="modal-close" id="closeRotatePdfBtn" aria-label="Fechar rotação">✕</button></div>
+      <div class="preview-meta"><label class="setting-row">Rotação<select id="rotatePdfAngle"><option value="90">90° no sentido horário</option><option value="180">180°</option><option value="270">90° no sentido anti-horário</option></select></label><p style="margin:0;color:var(--text-muted);font-size:13px;">Mantém o texto e a qualidade original das páginas.</p></div>
+      <div class="scan-workflow-footer"><button type="button" class="btn btn-secondary" id="cancelRotatePdfBtn">Cancelar</button><button type="button" class="btn btn-primary" id="applyRotatePdfBtn">Aplicar rotação</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="pageNumbersModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pageNumbersTitle">
+    <div class="modal-card" style="max-width:560px;">
+      <div class="modal-header"><div><p class="modal-title" id="pageNumbersTitle">Adicionar números de página</p><span id="pageNumbersFileName" style="color:var(--text-muted);font-size:13px;"></span></div><button type="button" class="modal-close" id="closePageNumbersBtn" aria-label="Fechar numeração">✕</button></div>
+      <div class="preview-meta">
+        <label class="setting-row">Posição<select id="pageNumberPosition"><option value="bottom-center">Inferior, centro</option><option value="bottom-right">Inferior, direita</option><option value="bottom-left">Inferior, esquerda</option><option value="top-center">Superior, centro</option></select></label>
+        <label class="setting-row">Começar em<input id="pageNumberStart" type="number" min="1" value="1"></label>
+      </div>
+      <div class="scan-workflow-footer"><button type="button" class="btn btn-secondary" id="cancelPageNumbersBtn">Cancelar</button><button type="button" class="btn btn-primary" id="applyPageNumbersBtn">Gerar PDF numerado</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="signatureModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="signatureTitle">
+    <div class="modal-card" style="max-width:640px;">
+      <div class="modal-header"><div><p class="modal-title" id="signatureTitle">Assinar PDF</p><span id="signatureFileName" style="color:var(--text-muted);font-size:13px;"></span></div><button type="button" class="modal-close" id="closeSignatureBtn" aria-label="Fechar assinatura">✕</button></div>
+      <div class="preview-meta">
+        <p style="margin:0;color:var(--text-muted);font-size:13px;">Desenhe no quadro. A assinatura visual será incorporada no PDF local; não é um certificado digital.</p>
+        <canvas id="signatureCanvas" width="1000" height="300" aria-label="Área para desenhar assinatura" style="display:block;width:100%;height:auto;touch-action:none;background:#fff;border:1px solid var(--border);border-radius:12px;cursor:crosshair;"></canvas>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+          <label class="setting-row">Página inicial<input id="signatureStart" type="number" min="1" value="1"></label>
+          <label class="setting-row">Página final<input id="signatureEnd" type="number" min="1" value="1"></label>
+        </div>
+        <label class="setting-row">Posição<select id="signaturePosition"><option value="bottom-right">Inferior, direita</option><option value="bottom-left">Inferior, esquerda</option></select></label>
+        <button type="button" class="btn btn-secondary" id="clearSignatureBtn">Limpar assinatura</button>
+      </div>
+      <div class="scan-workflow-footer"><button type="button" class="btn btn-secondary" id="cancelSignatureBtn">Cancelar</button><button type="button" class="btn btn-primary" id="applySignatureBtn">Aplicar e baixar</button></div>
+    </div>
+  </div>
+
   <div class="loading" id="loading">
     <div class="loading-card">
       <div class="spinner"></div>
@@ -642,6 +790,10 @@
   <input type="file" id="pdfToWordInput" accept=".pdf,application/pdf" multiple hidden>
   <input type="file" id="toJpgInput" accept=".pdf" hidden>
   <input type="file" id="toPdfInput" accept="image/*" multiple hidden>
+  <input type="file" id="organizeInput" accept="application/pdf,.pdf" hidden>
+  <input type="file" id="splitInput" accept="application/pdf,.pdf" hidden>
+  <input type="file" id="pageNumbersInput" accept="application/pdf,.pdf" hidden>
+  <input type="file" id="signatureInput" accept="application/pdf,.pdf" hidden>
 
   <script>
     const settingsKey = 'scanmaster-settings';
@@ -657,6 +809,11 @@
       generatedPdfName: '',
       importedFiles: [],
       extractData: { pages: [], selected: [] },
+      organizePdf: { file: null, pages: [], dragging: -1 },
+      splitPdf: { file: null, pageCount: 0 },
+      pageNumbersPdf: null,
+      signaturePdf: { file: null, pageCount: 0, drawing: false, drawn: false },
+      rotatePdfFile: null,
       pendingWordConversion: { items: [], processing: false },
       selectedPdfFiles: [],
       previewData: [],
@@ -861,11 +1018,15 @@
       document.getElementById('mergeInput').addEventListener('change', mergePDFs);
       document.getElementById('compressInput').addEventListener('change', compressPDF);
       document.getElementById('extractInput').addEventListener('change', extractPages);
-      document.getElementById('rotateInput').addEventListener('change', rotatePDF);
+      document.getElementById('rotateInput').addEventListener('change', event => openRotateDialog(event.target.files[0]));
       document.getElementById('watermarkInput').addEventListener('change', addWatermark);
       document.getElementById('ocrInput').addEventListener('change', ocrProcess);
       document.getElementById('toJpgInput').addEventListener('change', pdfToJpg);
       document.getElementById('toPdfInput').addEventListener('change', imagesToPdf);
+      document.getElementById('organizeInput').addEventListener('change', event => openPdfOrganizer(event.target.files[0]));
+      document.getElementById('splitInput').addEventListener('change', event => openSplitDialog(event.target.files[0]));
+      document.getElementById('pageNumbersInput').addEventListener('change', event => openPageNumbersDialog(event.target.files[0]));
+      document.getElementById('signatureInput').addEventListener('change', event => openSignatureDialog(event.target.files[0]));
       document.getElementById('mergeBtn').addEventListener('click', () => document.getElementById('mergeInput').click());
       document.getElementById('compressBtn').addEventListener('click', () => document.getElementById('compressInput').click());
       document.getElementById('extractBtn').addEventListener('click', () => document.getElementById('extractInput').click());
@@ -874,6 +1035,40 @@
       document.getElementById('ocrBtn').addEventListener('click', () => document.getElementById('ocrInput').click());
       document.getElementById('toJpgBtn').addEventListener('click', () => document.getElementById('toJpgInput').click());
       document.getElementById('toPdfBtn').addEventListener('click', () => document.getElementById('toPdfInput').click());
+      document.getElementById('organizeBtn').addEventListener('click', () => document.getElementById('organizeInput').click());
+      document.getElementById('splitBtn').addEventListener('click', () => document.getElementById('splitInput').click());
+      document.getElementById('pageNumbersBtn').addEventListener('click', () => document.getElementById('pageNumbersInput').click());
+      document.getElementById('signatureBtn').addEventListener('click', () => document.getElementById('signatureInput').click());
+      document.getElementById('closeOrganizeBtn').addEventListener('click', closeOrganizer);
+      document.getElementById('cancelOrganizeBtn').addEventListener('click', closeOrganizer);
+      document.getElementById('saveOrganizedPdfBtn').addEventListener('click', saveOrganizedPdf);
+      document.getElementById('closeSplitBtn').addEventListener('click', () => closeModal('splitModal'));
+      document.getElementById('cancelSplitBtn').addEventListener('click', () => closeModal('splitModal'));
+      document.getElementById('downloadSplitBtn').addEventListener('click', downloadSplitPdf);
+      document.getElementById('closePageNumbersBtn').addEventListener('click', () => closeModal('pageNumbersModal'));
+      document.getElementById('cancelPageNumbersBtn').addEventListener('click', () => closeModal('pageNumbersModal'));
+      document.getElementById('applyPageNumbersBtn').addEventListener('click', applyPageNumbers);
+      document.getElementById('closeSignatureBtn').addEventListener('click', () => closeModal('signatureModal'));
+      document.getElementById('cancelSignatureBtn').addEventListener('click', () => closeModal('signatureModal'));
+      document.getElementById('applySignatureBtn').addEventListener('click', applyPdfSignature);
+      document.getElementById('clearSignatureBtn').addEventListener('click', clearSignature);
+      const signatureCanvas = document.getElementById('signatureCanvas');
+      signatureCanvas.addEventListener('pointerdown', startSignatureStroke);
+      signatureCanvas.addEventListener('pointermove', continueSignatureStroke);
+      signatureCanvas.addEventListener('pointerup', endSignatureStroke);
+      signatureCanvas.addEventListener('pointercancel', endSignatureStroke);
+      document.getElementById('closeRotatePdfBtn').addEventListener('click', () => closeModal('rotatePdfModal'));
+      document.getElementById('cancelRotatePdfBtn').addEventListener('click', () => closeModal('rotatePdfModal'));
+      document.getElementById('applyRotatePdfBtn').addEventListener('click', applyPdfRotation);
+      document.getElementById('toolSearch').addEventListener('input', filterTools);
+      document.querySelectorAll('[data-category-filter]').forEach(button => button.addEventListener('click', () => {
+        document.querySelectorAll('[data-category-filter]').forEach(item => {
+          const selected = item === button;
+          item.classList.toggle('active', selected);
+          item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+        filterTools();
+      }));
       document.getElementById('closeWatermarkModalBtn').addEventListener('click', () => closeModal('watermarkModal'));
       document.getElementById('wmPreviewBtn').addEventListener('click', previewWatermark);
       document.getElementById('wmOpenPreviewBtn').addEventListener('click', previewWatermark);
@@ -951,7 +1146,357 @@
     function renderNav() {
       const active = document.querySelector('.nav-btn.active');
       if (active) return;
-      switchTab('scannerSection', document.querySelector('.nav-btn'));
+      switchTab('toolsSection', document.querySelector('.nav-btn[data-target="toolsSection"]'));
+    }
+
+    function filterTools() {
+      const query = document.getElementById('toolSearch').value.trim().toLocaleLowerCase('pt-BR');
+      const category = document.querySelector('[data-category-filter].active')?.dataset.categoryFilter || 'all';
+      let visible = 0;
+      document.querySelectorAll('.tool-card').forEach(card => {
+        const matchesQuery = !query || `${card.dataset.search || ''} ${card.textContent}`.toLocaleLowerCase('pt-BR').includes(query);
+        const matchesCategory = category === 'all' || card.dataset.category === category;
+        const show = matchesQuery && matchesCategory;
+        card.hidden = !show;
+        if (show) visible += 1;
+      });
+      document.getElementById('toolsEmpty').style.display = visible ? 'none' : 'block';
+    }
+
+    function requirePdfLib() {
+      if (window.PDFLib && window.PDFLib.PDFDocument) return window.PDFLib;
+      throw new Error('A biblioteca de edição PDF não carregou. Verifique sua conexão e atualize a página.');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function safePdfStem(filename) {
+      return (filename || 'documento').replace(/\.pdf$/i, '').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 80) || 'documento';
+    }
+
+    async function openPdfOrganizer(file) {
+      if (!file) return;
+      state.organizePdf = { file, sourceBytes: null, pages: [], dragging: -1 };
+      showLoading('Preparando páginas…');
+      try {
+        const buffer = await file.arrayBuffer();
+        state.organizePdf.sourceBytes = new Uint8Array(buffer);
+        const pdf = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+        for (let number = 1; number <= pdf.numPages; number += 1) {
+          const page = await pdf.getPage(number);
+          const viewport = page.getViewport({ scale: 0.4 });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          state.organizePdf.pages.push({ sourceIndex: number - 1, dataUrl: canvas.toDataURL('image/jpeg', 0.72) });
+          updateProgress(number / pdf.numPages);
+        }
+        renderOrganizerPages();
+        openModal('organizeModal');
+      } catch (error) {
+        showToast('Não foi possível abrir esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+        document.getElementById('organizeInput').value = '';
+      }
+    }
+
+    function renderOrganizerPages() {
+      const grid = document.getElementById('organizeGrid');
+      grid.replaceChildren();
+      state.organizePdf.pages.forEach((page, index) => {
+        const card = document.createElement('div');
+        card.className = 'organize-card';
+        card.draggable = true;
+        card.dataset.index = String(index);
+        const image = document.createElement('img');
+        image.src = page.dataUrl;
+        image.alt = `Pré-visualização da página ${page.sourceIndex + 1}`;
+        const label = document.createElement('strong');
+        label.textContent = `Página ${page.sourceIndex + 1}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'organize-remove';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', `Remover página ${page.sourceIndex + 1}`);
+        remove.addEventListener('click', () => {
+          state.organizePdf.pages.splice(index, 1);
+          renderOrganizerPages();
+        });
+        card.addEventListener('dragstart', event => {
+          state.organizePdf.dragging = index;
+          card.classList.add('dragging');
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', String(index));
+        });
+        card.addEventListener('dragend', () => card.classList.remove('dragging'));
+        card.addEventListener('dragover', event => { event.preventDefault(); card.classList.add('over'); });
+        card.addEventListener('dragleave', () => card.classList.remove('over'));
+        card.addEventListener('drop', event => {
+          event.preventDefault();
+          const from = Number(event.dataTransfer.getData('text/plain'));
+          const to = Number(card.dataset.index);
+          if (Number.isInteger(from) && from !== to && state.organizePdf.pages[from]) {
+            const [moved] = state.organizePdf.pages.splice(from, 1);
+            state.organizePdf.pages.splice(to, 0, moved);
+            renderOrganizerPages();
+          }
+        });
+        card.append(image, label, remove);
+        grid.appendChild(card);
+      });
+    }
+
+    function closeOrganizer() {
+      closeModal('organizeModal');
+      state.organizePdf = { file: null, sourceBytes: null, pages: [], dragging: -1 };
+    }
+
+    async function saveOrganizedPdf() {
+      if (!state.organizePdf.pages.length) return showToast('O PDF precisa ter ao menos uma página.', true);
+      showLoading('Salvando páginas…');
+      try {
+        const { PDFDocument } = requirePdfLib();
+        const source = await PDFDocument.load(state.organizePdf.sourceBytes);
+        const output = await PDFDocument.create();
+        const indices = state.organizePdf.pages.map(page => page.sourceIndex);
+        const copied = await output.copyPages(source, indices);
+        copied.forEach(page => output.addPage(page));
+        const bytes = await output.save();
+        downloadBlob(new Blob([bytes], { type: 'application/pdf' }), `${safePdfStem(state.organizePdf.file.name)}_organizado.pdf`);
+        closeOrganizer();
+        showToast('PDF organizado e baixado.');
+      } catch (error) {
+        showToast('Não foi possível salvar o PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function openSplitDialog(file) {
+      if (!file) return;
+      showLoading('Lendo páginas…');
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        state.splitPdf = { file, pageCount: pdf.numPages };
+        document.getElementById('splitPageCount').textContent = `${pdf.numPages} páginas no arquivo`;
+        document.getElementById('splitStart').max = String(pdf.numPages);
+        document.getElementById('splitEnd').max = String(pdf.numPages);
+        document.getElementById('splitStart').value = '1';
+        document.getElementById('splitEnd').value = String(pdf.numPages);
+        openModal('splitModal');
+      } catch (error) {
+        showToast('Não foi possível abrir esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+        document.getElementById('splitInput').value = '';
+      }
+    }
+
+    async function downloadSplitPdf() {
+      const start = Number(document.getElementById('splitStart').value);
+      const end = Number(document.getElementById('splitEnd').value);
+      const { file, pageCount } = state.splitPdf;
+      if (!file || !Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > pageCount) {
+        return showToast(`Informe um intervalo entre 1 e ${pageCount || 1}.`, true);
+      }
+      showLoading('Criando PDF…');
+      try {
+        const { PDFDocument } = requirePdfLib();
+        const source = await PDFDocument.load(await file.arrayBuffer());
+        const output = await PDFDocument.create();
+        const pages = await output.copyPages(source, Array.from({ length: end - start + 1 }, (_, index) => start - 1 + index));
+        pages.forEach(page => output.addPage(page));
+        downloadBlob(new Blob([await output.save()], { type: 'application/pdf' }), `${safePdfStem(file.name)}_paginas_${start}-${end}.pdf`);
+        closeModal('splitModal');
+        showToast('Intervalo separado e baixado.');
+      } catch (error) {
+        showToast('Não foi possível dividir esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function openPageNumbersDialog(file) {
+      if (!file) return;
+      state.pageNumbersPdf = file;
+      document.getElementById('pageNumbersFileName').textContent = file.name;
+      document.getElementById('pageNumberStart').value = '1';
+      openModal('pageNumbersModal');
+      document.getElementById('pageNumbersInput').value = '';
+    }
+
+    async function applyPageNumbers() {
+      const file = state.pageNumbersPdf;
+      const start = Number(document.getElementById('pageNumberStart').value);
+      if (!file || !Number.isInteger(start) || start < 1) return showToast('Informe um número inicial válido.', true);
+      showLoading('Numerando páginas…');
+      try {
+        const { PDFDocument, StandardFonts, rgb } = requirePdfLib();
+        const pdf = await PDFDocument.load(await file.arrayBuffer());
+        const font = await pdf.embedFont(StandardFonts.Helvetica);
+        const position = document.getElementById('pageNumberPosition').value;
+        pdf.getPages().forEach((page, index) => {
+          const { width, height } = page.getSize();
+          const size = 10;
+          const text = String(start + index);
+          const textWidth = font.widthOfTextAtSize(text, size);
+          const x = position.endsWith('left') ? 34 : position.endsWith('right') ? width - textWidth - 34 : (width - textWidth) / 2;
+          const y = position.startsWith('top') ? height - 32 : 22;
+          page.drawText(text, { x, y, size, font, color: rgb(0.25, 0.27, 0.32) });
+        });
+        downloadBlob(new Blob([await pdf.save()], { type: 'application/pdf' }), `${safePdfStem(file.name)}_numerado.pdf`);
+        closeModal('pageNumbersModal');
+        state.pageNumbersPdf = null;
+        showToast('Números de página adicionados.');
+      } catch (error) {
+        showToast('Não foi possível numerar esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function openSignatureDialog(file) {
+      if (!file) return;
+      showLoading('Lendo PDF…');
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        state.signaturePdf = { file, pageCount: pdf.numPages, drawing: false, drawn: false };
+        document.getElementById('signatureFileName').textContent = `${file.name} · ${pdf.numPages} páginas`;
+        document.getElementById('signatureStart').max = String(pdf.numPages);
+        document.getElementById('signatureEnd').max = String(pdf.numPages);
+        document.getElementById('signatureStart').value = '1';
+        document.getElementById('signatureEnd').value = String(pdf.numPages);
+        clearSignature();
+        openModal('signatureModal');
+      } catch (error) {
+        showToast('Não foi possível abrir esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+        document.getElementById('signatureInput').value = '';
+      }
+    }
+
+    function signaturePoint(event) {
+      const canvas = document.getElementById('signatureCanvas');
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left) * canvas.width / rect.width,
+        y: (event.clientY - rect.top) * canvas.height / rect.height
+      };
+    }
+
+    function startSignatureStroke(event) {
+      if (!state.signaturePdf.file) return;
+      event.preventDefault();
+      const canvas = document.getElementById('signatureCanvas');
+      canvas.setPointerCapture(event.pointerId);
+      const point = signaturePoint(event);
+      const ctx = canvas.getContext('2d');
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#17212f';
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      state.signaturePdf.drawing = true;
+      state.signaturePdf.drawn = true;
+    }
+
+    function continueSignatureStroke(event) {
+      if (!state.signaturePdf.drawing) return;
+      const point = signaturePoint(event);
+      const ctx = document.getElementById('signatureCanvas').getContext('2d');
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+
+    function endSignatureStroke() {
+      state.signaturePdf.drawing = false;
+    }
+
+    function clearSignature() {
+      const canvas = document.getElementById('signatureCanvas');
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      state.signaturePdf.drawn = false;
+      state.signaturePdf.drawing = false;
+    }
+
+    async function applyPdfSignature() {
+      const { file, pageCount, drawn } = state.signaturePdf;
+      if (!file) return;
+      if (!drawn) return showToast('Desenhe sua assinatura antes de continuar.', true);
+      const start = Number(document.getElementById('signatureStart').value);
+      const end = Number(document.getElementById('signatureEnd').value);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > pageCount) {
+        return showToast(`Informe páginas entre 1 e ${pageCount}.`, true);
+      }
+      showLoading('Aplicando assinatura…');
+      try {
+        const { PDFDocument } = requirePdfLib();
+        const pdf = await PDFDocument.load(await file.arrayBuffer());
+        const signature = await pdf.embedPng(document.getElementById('signatureCanvas').toDataURL('image/png'));
+        const position = document.getElementById('signaturePosition').value;
+        for (let pageIndex = start - 1; pageIndex < end; pageIndex += 1) {
+          const page = pdf.getPage(pageIndex);
+          const { width, height } = page.getSize();
+          const stampWidth = Math.min(180, width * 0.3);
+          const stampHeight = stampWidth * signature.height / signature.width;
+          page.drawImage(signature, {
+            x: position === 'bottom-left' ? 32 : width - stampWidth - 32,
+            y: 32,
+            width: stampWidth,
+            height: stampHeight
+          });
+          updateProgress((pageIndex - start + 2) / (end - start + 1));
+        }
+        downloadBlob(new Blob([await pdf.save()], { type: 'application/pdf' }), `${safePdfStem(file.name)}_assinado.pdf`);
+        closeModal('signatureModal');
+        state.signaturePdf = { file: null, pageCount: 0, drawing: false, drawn: false };
+        showToast('Assinatura aplicada ao PDF.');
+      } catch (error) {
+        showToast('Não foi possível aplicar a assinatura: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function openRotateDialog(file) {
+      if (!file) return;
+      state.rotatePdfFile = file;
+      document.getElementById('rotatePdfName').textContent = file.name;
+      document.getElementById('rotateInput').value = '';
+      openModal('rotatePdfModal');
+    }
+
+    async function applyPdfRotation() {
+      const file = state.rotatePdfFile;
+      if (!file) return;
+      const degrees = Number(document.getElementById('rotatePdfAngle').value);
+      showLoading('Rotacionando páginas…');
+      try {
+        const { PDFDocument, degrees: pdfDegrees } = requirePdfLib();
+        const pdf = await PDFDocument.load(await file.arrayBuffer());
+        pdf.getPages().forEach(page => page.setRotation(pdfDegrees((page.getRotation().angle + degrees) % 360)));
+        downloadBlob(new Blob([await pdf.save()], { type: 'application/pdf' }), `${safePdfStem(file.name)}_rotacionado.pdf`);
+        closeModal('rotatePdfModal');
+        state.rotatePdfFile = null;
+        showToast('PDF rotacionado sem alterar a qualidade.');
+      } catch (error) {
+        showToast('Não foi possível rotacionar esse PDF: ' + error.message, true);
+      } finally {
+        hideLoading();
+      }
     }
 
     function switchTab(target, button) {
@@ -2861,29 +3406,20 @@
       if (files.length < 2) return showToast('Selecione pelo menos 2 PDFs.', true);
       showLoading('Mesclando PDFs...');
       try {
-        const outputPdf = new jsPDF({ compress: true });
+        const { PDFDocument } = requirePdfLib();
+        const outputPdf = await PDFDocument.create();
         let pageCount = 0;
+        const totalPages = [];
         for (const file of files) {
-          const buffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.5 });
-            const canvas = document.createElement('canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-            const image = canvas.toDataURL('image/jpeg', 0.85);
-            if (pageCount > 0) outputPdf.addPage();
-            const props = outputPdf.getImageProperties(image);
-            const pdfWidth = outputPdf.internal.pageSize.getWidth();
-            const ratio = pdfWidth / props.width;
-            outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
-            pageCount++;
-            updateProgress(pageCount / (pdf.numPages * files.length));
-          }
+          const source = await PDFDocument.load(await file.arrayBuffer());
+          const indices = source.getPages().map((_, index) => index);
+          const copied = await outputPdf.copyPages(source, indices);
+          copied.forEach(page => outputPdf.addPage(page));
+          pageCount += copied.length;
+          totalPages.push(pageCount);
+          updateProgress(totalPages.length / files.length);
         }
-        outputPdf.save('pdf_mesclado.pdf');
+        downloadBlob(new Blob([await outputPdf.save()], { type: 'application/pdf' }), 'pdf_mesclado.pdf');
         showToast('PDF mesclado com sucesso');
       } catch (error) {
         showToast('Erro ao mesclar: ' + error.message, true);
@@ -2916,8 +3452,14 @@
           outputPdf.addImage(image, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
           updateProgress(i / pdf.numPages);
         }
-        outputPdf.save('pdf_comprimido.pdf');
-        showToast('PDF comprimido');
+        const compressedBlob = outputPdf.output('blob');
+        downloadBlob(compressedBlob, `${safePdfStem(file.name)}_compactado.pdf`);
+        if (compressedBlob.size < file.size) {
+          const reduction = Math.round((1 - compressedBlob.size / file.size) * 100);
+          showToast(`Arquivo reduzido em ${reduction}%`);
+        } else {
+          showToast('PDF gerado, mas esta versão ficou maior que o original.', true);
+        }
       } catch (error) {
         showToast('Erro ao comprimir: ' + error.message, true);
       } finally {
@@ -2933,7 +3475,7 @@
       try {
         const buffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-        state.extractData = { pages: [], selected: [] };
+        state.extractData = { pages: [], selected: [], sourceBytes: new Uint8Array(buffer), fileName: file.name };
         const grid = document.getElementById('extractGrid');
         grid.innerHTML = '';
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -2995,15 +3537,12 @@
       if (!selected.length) return showToast('Selecione pelo menos uma página.', true);
       showLoading('Gerando PDF...');
       try {
-        const pdf = new jsPDF({ compress: true });
-        selected.forEach((item, index) => {
-          if (index > 0) pdf.addPage();
-          const props = pdf.getImageProperties(item.dataUrl);
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const ratio = pdfWidth / props.width;
-          pdf.addImage(item.dataUrl, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
-        });
-        pdf.save('paginas_extraidas.pdf');
+        const { PDFDocument } = requirePdfLib();
+        const source = await PDFDocument.load(state.extractData.sourceBytes);
+        const output = await PDFDocument.create();
+        const copied = await output.copyPages(source, selected.map(item => item.num - 1));
+        copied.forEach(page => output.addPage(page));
+        downloadBlob(new Blob([await output.save()], { type: 'application/pdf' }), `${safePdfStem(state.extractData.fileName)}_paginas_extraidas.pdf`);
         showToast('Páginas extraídas');
         closeModal('extractModal');
       } catch (error) {
@@ -3686,8 +4225,10 @@
       if (!file) return;
       showLoading('Convertendo PDF...');
       try {
+        if (!window.JSZip) throw new Error('A biblioteca ZIP não carregou. Verifique sua conexão e atualize a página.');
         const buffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const zip = new JSZip();
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const viewport = page.getViewport({ scale: 2.0 });
@@ -3695,14 +4236,15 @@
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-          const imageUrl = canvas.toDataURL('image/jpeg', 0.92);
-          const link = document.createElement('a');
-          link.href = imageUrl;
-          link.download = `pagina_${i}.jpg`;
-          link.click();
+          const imageBlob = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Falha ao gerar imagem.')), 'image/jpeg', 0.92));
+          zip.file(`pagina_${String(i).padStart(3, '0')}.jpg`, imageBlob);
+          canvas.width = 0;
+          canvas.height = 0;
           updateProgress(i / pdf.numPages);
         }
-        showToast('Conversão concluída');
+        const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 4 } });
+        downloadBlob(archive, `${safePdfStem(file.name)}_imagens.zip`);
+        showToast(`${pdf.numPages} imagens baixadas em um ZIP.`);
       } catch (error) {
         showToast('Erro: ' + error.message, true);
       } finally {
@@ -3723,7 +4265,8 @@
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const ratio = pdfWidth / props.width;
           if (i > 0) pdf.addPage();
-          pdf.addImage(imageUrl, 'JPEG', 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
+          const imageFormat = files[i].type === 'image/png' ? 'PNG' : 'JPEG';
+          pdf.addImage(imageUrl, imageFormat, 0, 0, props.width * ratio, props.height * ratio, undefined, 'FAST');
           updateProgress((i + 1) / files.length);
         }
         pdf.save('imagem_para_pdf.pdf');

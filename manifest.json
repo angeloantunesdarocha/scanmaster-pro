@@ -1,7 +1,7 @@
 {
   "name": "ScanMaster Pro",
   "short_name": "ScanMaster",
-  "description": "Scanner moderno para documentos e PDF",
+  "description": "Ferramentas PDF e scanner de documentos no navegador",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

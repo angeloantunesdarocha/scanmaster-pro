@@ -2,7 +2,7 @@
 
 # 📄 ScanMaster Pro
 
-**Scanner inteligente de documentos no navegador — capture, ajuste, aplique OCR, filtre e exporte para PDF ou Word diretamente pelo navegador.**
+**Ferramentas para PDF e scanner inteligente de documentos no navegador — organize, converta, aplique OCR e exporte arquivos localmente.**
 
 [![Status](https://img.shields.io/badge/status-active-success.svg)]()
 [![Deploy](https://img.shields.io/badge/deploy-Vercel-black?logo=vercel)](https://scanmaster-pro-dusky.vercel.app)
@@ -18,11 +18,13 @@
 
 ## 📌 Visão geral
 
-O **ScanMaster Pro** é um **scanner inteligente de documentos** que roda no navegador, sem instalar nada. Foi pensado para digitalizar notas fiscais, contratos, recibos, RG, CNH e outros documentos a partir do celular ou do desktop.
+O **ScanMaster Pro** é um conjunto de ferramentas para PDF que roda no navegador, sem instalar nada, com scanner de documentos integrado para celular e desktop.
 
 A aplicação detecta o documento automaticamente, corrige a perspectiva, permite ajustar manualmente os quatro cantos, aplica **OCR** para extrair texto, oferece **filtros** e exporta para **PDF**, **Word** ou **imagem**.
 
-> 🔒 **Privacidade:** o processamento dos documentos ocorre no dispositivo do usuário. Bibliotecas e modelos utilizados pela aplicação podem ser carregados pela internet no primeiro acesso e, em seguida, ficam em cache local.
+> 🔒 **Privacidade:** o processamento dos documentos ocorre no dispositivo do usuário. Bibliotecas e modelos são carregados de CDNs; uma conexão é necessária para o primeiro acesso e algumas funções.
+
+> ℹ️ **Limites de formato:** compressão e marca d'água renderizam páginas em imagens e podem remover texto pesquisável, links, formulários ou metadados. A conversão PDF → Word reconstrói o texto e não garante o layout original. Arquivos protegidos por senha e PDFs muito grandes podem não abrir no navegador.
 
 A interface foi inspirada em **aplicativos profissionais de digitalização** e funciona em **desktop, tablet e smartphone**.
 
@@ -48,10 +50,19 @@ A interface foi inspirada em **aplicativos profissionais de digitalização** e 
 - **Cópia rápida** do texto extraído para a área de transferência
 - **Exportação do OCR** em `.txt`
 
-### 📄 Exportação e conversão
+### 📄 Organização e edição de PDF
+- **Mesclar PDFs** preservando páginas, texto e conteúdo vetorial
+- **Organizar páginas**: reordenar e remover páginas com pré-visualização
+- **Dividir PDF** salvando um intervalo de páginas como outro arquivo
+- **Extrair páginas** selecionadas sem rasterizar o conteúdo
+- **Rotacionar páginas** e **adicionar numeração** sem rasterizar o conteúdo
+- **Assinatura visual** desenhada no navegador e incorporada às páginas escolhidas (não é assinatura digital certificada)
+- **Marca d'água** e **compressão** por recriação rasterizada
+
+### 🔄 Exportação e conversão
 - **Imagem → PDF** (uma ou várias páginas, com tamanho A4/Carta/Ofício)
 - **Word → PDF** (`.docx` enviado pelo usuário, convertido localmente)
-- **PDF → Word** (`.pdf` enviado, convertido para `.docx` editável)
+- **PDF → Word** (`.pdf` enviado, reconstruído como `.docx` editável; o layout pode variar)
 - **Geração de PDF multi-página** a partir de várias digitalizações
 - **Pré-visualização, conversão e download controlado do resultado.**
 
@@ -82,6 +93,7 @@ A interface foi inspirada em **aplicativos profissionais de digitalização** e 
 - **JavaScript (Vanilla)** — lógica da aplicação, sem frameworks
 - **OpenCV.js** — detecção de contorno e análise de imagem
 - **PDF.js** — leitura e renderização de PDFs no navegador
+- **pdf-lib** — mesclagem, divisão, organização, rotação, numeração e assinatura visual sem rasterizar páginas
 - **jsPDF** — geração de PDFs a partir de conteúdo da aplicação
 - **Mammoth.js** — conversão `.docx` → HTML
 - **Tesseract.js** — OCR executado via WebAssembly no navegador
@@ -190,12 +202,12 @@ scanmaster-pro/
 
 ## 🗺 Roadmap
 
-Funcionalidades planejadas para versões futuras:
+Funcionalidades ainda não disponíveis:
 
 - [ ] OCR para mais idiomas (espanhol, francês)
 - [ ] Assinatura digital dentro do app
 - [ ] Marca-d'água customizável nos PDFs gerados
-- [ ] Compressão inteligente de PDF
+- [x] Compressão de PDF (recria páginas como imagens; resultado depende do arquivo)
 - [ ] Sincronização opcional (opt-in do usuário) com serviços de armazenamento
 - [ ] Tradução automática do texto extraído pelo OCR
 - [ ] Histórico local das últimas digitalizações
